@@ -11,17 +11,25 @@ from mysql.connector import Error
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, timedelta
 import functools
+import os
 
 app = Flask(__name__)
 app.secret_key = "movie_rec_secret_2024"
+app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 CORS(app, supports_credentials=True)
 
 # ─── DB CONFIG ───────────────────────────────────────────────
 DB_CONFIG = {
-    "host":     "localhost",
-    "user":     "root",
-    "password": "your_mysql_password",   # ← change this
-    "database": "movie_rec_db"
+    "host":     os.environ.get("MYSQL_HOST", "localhost"),
+    "user":     os.environ.get("MYSQL_USER", "root"),
+    "password": os.environ.get("MYSQL_PASSWORD", ""),
+    "database": os.environ.get("MYSQL_DATABASE", "movie_rec_db")
+}
+
+INDIAN_LANGUAGES = {
+    "Hindi", "Tamil", "Telugu", "Malayalam", "Kannada", "Bengali", "Marathi",
+    "Punjabi", "Gujarati", "Assamese", "Odia",
+    "hi", "ta", "te", "ml", "kn", "bn", "mr", "pa", "gu", "as", "or"
 }
 
 def get_db():
@@ -131,6 +139,7 @@ def get_movies():
     order    = "DESC" if request.args.get("order", "desc") == "desc" else "ASC"
     genre    = request.args.get("genre")
     language = request.args.get("language")
+    country  = request.args.get("country")
     year     = request.args.get("year")
     search   = request.args.get("q")
 
@@ -146,6 +155,9 @@ def get_movies():
         conditions = []
         if genre:    conditions.append("g.genre_name = %s"); params.append(genre)
         if language: conditions.append("m.language = %s"); params.append(language)
+        if country == "India":
+            conditions.append("m.language IN (" + ",".join(["%s"] * len(INDIAN_LANGUAGES)) + ")")
+            params.extend(list(INDIAN_LANGUAGES))
         if year:     conditions.append("m.release_year = %s"); params.append(year)
         if conditions: sql += "WHERE " + " AND ".join(conditions) + " "
 
@@ -309,6 +321,87 @@ def rec_popular():
 @app.route("/api/recommendations/trending", methods=["GET"])
 def rec_trending():
     rows = query("SELECT * FROM vw_trending_movies LIMIT 10")
+    return jsonify(rows)
+
+@app.route("/api/recommendations/mood", methods=["POST"])
+@login_required
+def rec_mood():
+    mood = (request.json or {}).get("mood", "").lower()
+    mood_genres = {
+        "happy": ["Comedy", "Animation", "Family"],
+        "sad": ["Drama", "Romance"],
+        "excited": ["Action", "Adventure", "Sci-Fi"],
+        "scared": ["Horror", "Thriller"],
+        "romantic": ["Romance", "Drama"],
+        "adventurous": ["Adventure", "Action", "Fantasy"],
+        "funny": ["Comedy", "Animation"],
+        "tense": ["Thriller", "Mystery", "Crime"],
+    }
+    genres = ["Drama", "Comedy", "Action", "Romance"]
+    for key, values in mood_genres.items():
+        if key in mood:
+            genres = values
+            break
+    placeholders = ",".join(["%s"] * len(genres))
+    movies = query(
+        f"SELECT DISTINCT m.movie_id, m.title, m.release_year, m.avg_rating, "
+        f"m.total_ratings, m.poster_url, m.language "
+        f"FROM Movies m "
+        f"JOIN Movie_Genres mg ON m.movie_id = mg.movie_id "
+        f"JOIN Genres g ON mg.genre_id = g.genre_id "
+        f"WHERE g.genre_name IN ({placeholders}) "
+        f"ORDER BY m.avg_rating DESC, m.total_ratings DESC LIMIT 60",
+        tuple(genres)
+    )
+    return jsonify({"movies": movies, "matched_genres": genres, "mood": mood})
+
+@app.route("/api/movies/languages", methods=["GET"])
+def movie_languages():
+    rows = query(
+        "SELECT language, COUNT(*) AS count FROM Movies "
+        "WHERE language IS NOT NULL AND language != '' "
+        "GROUP BY language ORDER BY count DESC"
+    )
+    result = []
+    for row in rows:
+        movies = query(
+            "SELECT movie_id, title, release_year, avg_rating, poster_url, language "
+            "FROM Movies WHERE language=%s ORDER BY avg_rating DESC LIMIT 5",
+            (row["language"],)
+        )
+        result.append({"language": row["language"], "count": row["count"], "movies": movies})
+    return jsonify(result)
+
+@app.route("/api/movies/indian-languages", methods=["GET"])
+def indian_movie_languages():
+    placeholders = ",".join(["%s"] * len(INDIAN_LANGUAGES))
+    rows = query(
+        f"SELECT language, COUNT(*) AS count FROM Movies "
+        f"WHERE language IN ({placeholders}) "
+        f"GROUP BY language ORDER BY count DESC",
+        tuple(INDIAN_LANGUAGES)
+    )
+    result = []
+    for row in rows:
+        movies = query(
+            "SELECT movie_id, title, release_year, avg_rating, poster_url, language "
+            "FROM Movies WHERE language=%s ORDER BY avg_rating DESC LIMIT 5",
+            (row["language"],)
+        )
+        result.append({"language": row["language"], "count": row["count"], "movies": movies})
+    return jsonify(result)
+
+@app.route("/api/user/reviews", methods=["GET"])
+@login_required
+def user_reviews():
+    rows = query(
+        "SELECT r.rating_id, r.movie_id, r.score, r.review_text, r.created_at, "
+        "m.title AS movie_title, m.release_year AS movie_year, "
+        "m.language AS movie_language, m.poster_url AS movie_poster "
+        "FROM Ratings r JOIN Movies m ON r.movie_id = m.movie_id "
+        "WHERE r.user_id = %s ORDER BY r.created_at DESC",
+        (session["user_id"],)
+    )
     return jsonify(rows)
 
 # ─── GENRES ──────────────────────────────────────────────────

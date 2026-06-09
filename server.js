@@ -3,7 +3,33 @@ const fs = require('fs');
 const path = require('path');
 const url = require('url');
 
-const port = 3000;
+const port = parseInt(process.env.PORT || '3000', 10);
+const BACKEND_HOST = process.env.BACKEND_HOST || '127.0.0.1';
+const BACKEND_PORT = parseInt(process.env.BACKEND_PORT || '5000', 10);
+
+function proxyToBackend(req, res) {
+  const options = {
+    hostname: BACKEND_HOST,
+    port: BACKEND_PORT,
+    path: req.url,
+    method: req.method,
+    headers: { ...req.headers, host: `${BACKEND_HOST}:${BACKEND_PORT}` }
+  };
+
+  const proxyReq = http.request(options, (proxyRes) => {
+    res.writeHead(proxyRes.statusCode, proxyRes.headers);
+    proxyRes.pipe(res, { end: true });
+  });
+
+  proxyReq.on('error', () => {
+    res.writeHead(502, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({
+      error: 'Backend unavailable. Start the full app with: npm start'
+    }));
+  });
+
+  req.pipe(proxyReq, { end: true });
+}
 
 const mimeTypes = {
   '.html': 'text/html',
@@ -37,6 +63,11 @@ const server = http.createServer((req, res) => {
 
   const parsedUrl = url.parse(req.url);
   let pathname = parsedUrl.pathname;
+
+  if (pathname.startsWith('/api/')) {
+    proxyToBackend(req, res);
+    return;
+  }
   
   // Default to index.html
   if (pathname === '/') {
@@ -72,6 +103,6 @@ const server = http.createServer((req, res) => {
 });
 
 server.listen(port, () => {
-  console.log(`CineMatch Movie Recommendation System running at http://localhost:${port}`);
-  console.log('Note: Backend API calls will not work without the Flask server running');
+  console.log(`CineMatch frontend running at http://localhost:${port}`);
+  console.log(`API requests proxied to http://${BACKEND_HOST}:${BACKEND_PORT}`);
 });

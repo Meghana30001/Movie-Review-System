@@ -3,7 +3,8 @@ const fs = require('fs');
 const path = require('path');
 const url = require('url');
 
-const port = 3000;
+const port = parseInt(process.env.PORT || '3000', 10);
+const apiOnly = process.env.API_ONLY === '1';
 
 // Load ultimate movie database (worldwide + all Indian languages)
 let mockMovies = [];
@@ -87,6 +88,15 @@ const mockUsers = [
     age: 19,
     gender: 'Female',
     location: 'India'
+  },
+  {
+    user_id: 2,
+    name: 'Admin User',
+    email: 'admin@movierec.com',
+    role: 'admin',
+    age: 30,
+    gender: 'Other',
+    location: 'Mumbai'
   }
 ];
 
@@ -291,6 +301,27 @@ const server = http.createServer(async (req, res) => {
     else if (pathname === '/api/movies/indian') {
       const indianMovies = mockMovies.filter(m => m.country === 'India');
       sendJson(res, indianMovies.sort((a, b) => b.avg_rating - a.avg_rating).slice(0, 20));
+    }
+    else if (pathname === '/api/movies' && req.method === 'POST') {
+      const postData = await parsePostData(req);
+      const newMovie = {
+        movie_id: mockMovies.length + 1,
+        title: postData.title,
+        release_year: postData.release_year,
+        duration: postData.duration,
+        language: postData.language || 'English',
+        synopsis: postData.synopsis || '',
+        poster_url: postData.poster_url || '',
+        trailer_url: postData.trailer_url || '',
+        avg_rating: 0,
+        total_ratings: 0,
+        genres: [],
+        country: 'United States',
+        country_code: 'US',
+        region: 'North America'
+      };
+      mockMovies.push(newMovie);
+      sendJson(res, { message: 'Movie added', movie_id: newMovie.movie_id }, 201);
     }
     else if (pathname === '/api/movies') {
       const page = parseInt(parsedUrl.query.page) || 1;
@@ -691,9 +722,63 @@ const server = http.createServer(async (req, res) => {
     else if (pathname === '/api/watch-history') {
       sendJson(res, []);
     }
+    else if (pathname.startsWith('/api/watch-history/') && req.method === 'POST') {
+      sendJson(res, { message: 'Marked as watched' });
+    }
+    else if (pathname === '/api/admin/stats') {
+      const totalRatings = mockMovies.reduce((sum, m) => sum + (m.total_ratings || 0), 0) + userRatings.length;
+      sendJson(res, {
+        total_users: mockUsers.length,
+        total_movies: mockMovies.length,
+        total_ratings: totalRatings,
+        active_7d: mockUsers.length,
+        platform_avg_rating: mockMovies.length
+          ? (mockMovies.reduce((sum, m) => sum + (m.avg_rating || 0), 0) / mockMovies.length).toFixed(2)
+          : '0.00'
+      });
+    }
+    else if (pathname === '/api/admin/reviews') {
+      const reviews = userRatings.map(r => {
+        const movie = mockMovies.find(m => m.movie_id === r.movie_id);
+        return {
+          rating_id: r.rating_id,
+          score: r.score,
+          review_text: r.review_text,
+          created_at: r.created_at,
+          reviewer: currentUser ? currentUser.name : 'User',
+          movie: movie ? movie.title : 'Unknown'
+        };
+      });
+      sendJson(res, reviews);
+    }
+    else if (pathname === '/api/genres/popularity') {
+      const genreStats = {};
+      mockMovies.forEach(movie => {
+        (movie.genres || []).forEach(genre => {
+          if (!genreStats[genre]) genreStats[genre] = { count: 0, sum: 0 };
+          genreStats[genre].count++;
+          genreStats[genre].sum += movie.avg_rating || 0;
+        });
+      });
+      sendJson(res, Object.entries(genreStats)
+        .map(([name, s]) => ({
+          genre_name: name,
+          movie_count: s.count,
+          avg_genre_rating: (s.sum / s.count).toFixed(2)
+        }))
+        .sort((a, b) => b.movie_count - a.movie_count));
+    }
+    else if (pathname.match(/^\/api\/admin\/reviews\/\d+$/) && req.method === 'DELETE') {
+      const ratingId = parseInt(pathname.split('/')[4]);
+      userRatings = userRatings.filter(r => r.rating_id !== ratingId);
+      sendJson(res, { message: 'Review removed' });
+    }
     else {
       sendJson(res, { error: 'API endpoint not found' }, 404);
     }
+  }
+  else if (apiOnly) {
+    sendJson(res, { error: 'Not found' }, 404);
   }
   // Serve static files
   else {
@@ -755,7 +840,8 @@ server.listen(port, () => {
     }
   });
   
-  console.log(`\n🌍 CineMatch ULTIMATE Server running at http://localhost:${port}/`);
+  const modeLabel = apiOnly ? 'API backend' : 'full stack';
+  console.log(`\n🌍 CineMatch ${modeLabel} running at http://localhost:${port}/`);
   console.log(`✅ Total Movies: ${mockMovies.length}`);
   console.log(`🌍 Countries: ${Object.keys(countryStats).length}`);
   console.log(`🗺️ Regions: ${Object.keys(regionStats).length}`);

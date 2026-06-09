@@ -1,4 +1,11 @@
 {
+  "name": "movie-review-system",
+  "scripts": {
+    "start": "node start.js",
+    "frontend": "node server.js",
+    "backend": "set API_ONLY=1&& set PORT=5000&& node ultimate-movie-server.js",
+    "backend:flask": "python app.py"
+  },
   "dependencies": {
     "mysql2": "^3.22.5"
   }

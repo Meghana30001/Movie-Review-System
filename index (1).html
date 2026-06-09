@@ -543,10 +543,7 @@
 <div id="toast"></div>
 
 <script>
-const API_BASE = 'https://movie-review-system-4oqe.onrender.com';
-const API = (location.hostname === 'localhost' || location.hostname === '127.0.0.1')
-  ? '/api'
-  : `${API_BASE}/api`;
+const API = '/api';
 let currentUser = null;
 let selectedRating = 0;
 let currentMovieId = null;
@@ -599,7 +596,7 @@ async function doLogin() {
     if (!res.ok) return showAuthError(d.error);
     currentUser = d.user;
     showApp();
-  } catch { showAuthError('Cannot reach the server. Check that FRONTEND_URL is set on Render.'); }
+  } catch { showAuthError('Connection error — server may be starting up. Try again in 30 seconds.'); }
 }
 
 async function doRegister() {
@@ -607,10 +604,15 @@ async function doRegister() {
   try {
     const res = await fetch(`${API}/auth/register`, { method: 'POST', credentials: 'include', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
     const d = await res.json();
-    if (!res.ok) return showAuthError(d.error || d.detail || 'Registration failed');
+    if (!res.ok) {
+      const msg = d.detail?.includes("doesn't exist")
+        ? 'Database not set up. Set MYSQL_DATABASE=movie_rec_db on Render and import schema.sql.'
+        : (d.error || d.detail || 'Registration failed');
+      return showAuthError(msg);
+    }
     showAuthError('Registered! Please sign in.', true);
     toggleAuth('login');
-  } catch { showAuthError('Cannot reach the server. Check that FRONTEND_URL is set on Render.'); }
+  } catch { showAuthError('Connection error — server may be starting up. Try again in 30 seconds.'); }
 }
 
 async function doLogout() {

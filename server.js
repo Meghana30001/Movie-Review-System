@@ -1,22 +1,39 @@
 const http = require('http');
+const https = require('https');
 const fs = require('fs');
 const path = require('path');
 const url = require('url');
 
 const port = parseInt(process.env.PORT || '3000', 10);
+const BACKEND_URL = process.env.BACKEND_URL || '';
 const BACKEND_HOST = process.env.BACKEND_HOST || '127.0.0.1';
 const BACKEND_PORT = parseInt(process.env.BACKEND_PORT || '5000', 10);
 
 function proxyToBackend(req, res) {
-  const options = {
-    hostname: BACKEND_HOST,
-    port: BACKEND_PORT,
-    path: req.url,
-    method: req.method,
-    headers: { ...req.headers, host: `${BACKEND_HOST}:${BACKEND_PORT}` }
-  };
+  let lib = http;
+  let options;
 
-  const proxyReq = http.request(options, (proxyRes) => {
+  if (BACKEND_URL) {
+    const backend = new URL(BACKEND_URL);
+    lib = backend.protocol === 'https:' ? https : http;
+    options = {
+      hostname: backend.hostname,
+      port: backend.port || (backend.protocol === 'https:' ? 443 : 80),
+      path: req.url,
+      method: req.method,
+      headers: { ...req.headers, host: backend.host }
+    };
+  } else {
+    options = {
+      hostname: BACKEND_HOST,
+      port: BACKEND_PORT,
+      path: req.url,
+      method: req.method,
+      headers: { ...req.headers, host: `${BACKEND_HOST}:${BACKEND_PORT}` }
+    };
+  }
+
+  const proxyReq = lib.request(options, (proxyRes) => {
     res.writeHead(proxyRes.statusCode, proxyRes.headers);
     proxyRes.pipe(res, { end: true });
   });

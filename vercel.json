@@ -1,9 +1,16 @@
 {
+  "version": 2,
+  "installCommand": "",
+  "buildCommand": "",
+  "framework": null,
   "rewrites": [
-    { "source": "/", "destination": "/index (1).html" },
     {
-      "source": "/api/(.*)",
-      "destination": "https://movie-review-system-4oqe.onrender.com/api/$1"
+      "source": "/api/:path*",
+      "destination": "https://movie-review-system-4oqe.onrender.com/api/:path*"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index (1).html"
     }
   ]
 }

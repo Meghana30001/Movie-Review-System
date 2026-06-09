@@ -599,7 +599,7 @@ async function doLogin() {
     if (!res.ok) return showAuthError(d.error);
     currentUser = d.user;
     showApp();
-  } catch { showAuthError('Connection error'); }
+  } catch { showAuthError('Cannot reach the server. Check that FRONTEND_URL is set on Render.'); }
 }
 
 async function doRegister() {
@@ -607,10 +607,10 @@ async function doRegister() {
   try {
     const res = await fetch(`${API}/auth/register`, { method: 'POST', credentials: 'include', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
     const d = await res.json();
-    if (!res.ok) return showAuthError(d.error);
+    if (!res.ok) return showAuthError(d.error || d.detail || 'Registration failed');
     showAuthError('Registered! Please sign in.', true);
     toggleAuth('login');
-  } catch { showAuthError('Connection error'); }
+  } catch { showAuthError('Cannot reach the server. Check that FRONTEND_URL is set on Render.'); }
 }
 
 async function doLogout() {

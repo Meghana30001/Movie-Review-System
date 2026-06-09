@@ -19,9 +19,17 @@ const {
 } = require('./movie-utils');
 
 const port = parseInt(process.env.PORT || '5000', 10);
+
+function normalizeOrigin(value) {
+  const trimmed = (value || '').trim().replace(/\/$/, '');
+  if (!trimmed) return '';
+  if (!/^https?:\/\//i.test(trimmed)) return `https://${trimmed}`;
+  return trimmed;
+}
+
 const ALLOWED_ORIGINS = (process.env.FRONTEND_URL || '')
   .split(',')
-  .map(s => s.trim())
+  .map(normalizeOrigin)
   .filter(Boolean);
 const isProduction = process.env.NODE_ENV === 'production' || !!process.env.RENDER;
 
@@ -29,11 +37,13 @@ const pool = mysql.createPool(poolConfig);
 const sessions = new Map();
 
 function setCorsHeaders(req, res) {
-  const origin = req.headers.origin;
+  const origin = normalizeOrigin(req.headers.origin);
   if (!ALLOWED_ORIGINS.length) {
     res.setHeader('Access-Control-Allow-Origin', origin || '*');
   } else if (origin && ALLOWED_ORIGINS.includes(origin)) {
     res.setHeader('Access-Control-Allow-Origin', origin);
+  } else if (origin && isProduction) {
+    console.warn(`CORS blocked origin: ${origin}. Allowed: ${ALLOWED_ORIGINS.join(', ')}`);
   }
   res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');

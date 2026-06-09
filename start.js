@@ -5,11 +5,10 @@ const root = __dirname;
 const node = process.execPath;
 
 function startBackend() {
-  return spawn(node, ['ultimate-movie-server.js'], {
-    cwd: root,
-    env: { ...process.env, PORT: '5000', API_ONLY: '1' },
-    stdio: 'inherit'
-  });
+  const backend = process.env.USE_MOCK_BACKEND === '1' ? 'ultimate-movie-server.js' : 'db-server.js';
+  const env = { ...process.env, PORT: '5000' };
+  if (backend === 'ultimate-movie-server.js') env.API_ONLY = '1';
+  return spawn(node, [backend], { cwd: root, env, stdio: 'inherit' });
 }
 
 function startFrontend() {
@@ -40,4 +39,5 @@ process.on('SIGINT', () => {
   process.exit(0);
 });
 
-console.log('Starting CineMatch (frontend :3000 + backend :5000)...');
+const backendLabel = process.env.USE_MOCK_BACKEND === '1' ? 'mock API' : 'MySQL database';
+console.log(`Starting CineMatch (frontend :3000 + ${backendLabel} :5000)...`);

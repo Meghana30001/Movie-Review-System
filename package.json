@@ -3,7 +3,10 @@
   "scripts": {
     "start": "node start.js",
     "frontend": "node server.js",
-    "backend": "set API_ONLY=1&& set PORT=5000&& node ultimate-movie-server.js",
+    "backend": "node db-server.js",
+    "backend:mock": "set USE_MOCK_BACKEND=1&& node start.js",
+    "setup-db": "node setup-database.js",
+    "fix-posters": "node fix-posters.js",
     "backend:flask": "python app.py"
   },
   "dependencies": {

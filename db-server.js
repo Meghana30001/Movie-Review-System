@@ -19,9 +19,33 @@ const {
 } = require('./movie-utils');
 
 const port = parseInt(process.env.PORT || '5000', 10);
+const ALLOWED_ORIGINS = (process.env.FRONTEND_URL || '')
+  .split(',')
+  .map(s => s.trim())
+  .filter(Boolean);
+const isProduction = process.env.NODE_ENV === 'production' || !!process.env.RENDER;
 
 const pool = mysql.createPool(poolConfig);
 const sessions = new Map();
+
+function setCorsHeaders(req, res) {
+  const origin = req.headers.origin;
+  if (!ALLOWED_ORIGINS.length) {
+    res.setHeader('Access-Control-Allow-Origin', origin || '*');
+  } else if (origin && ALLOWED_ORIGINS.includes(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+  }
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+}
+
+function sessionCookieFlags() {
+  if (isProduction && ALLOWED_ORIGINS.length) {
+    return 'Path=/; HttpOnly; SameSite=None; Secure';
+  }
+  return 'Path=/; HttpOnly; SameSite=Lax';
+}
 let moodMovieCache = null;
 let moodCacheTime = 0;
 
@@ -56,13 +80,13 @@ function setSession(res, user) {
     name: user.name,
     role: user.role
   });
-  res.setHeader('Set-Cookie', `session=${sid}; Path=/; HttpOnly; SameSite=Lax`);
+  res.setHeader('Set-Cookie', `session=${sid}; ${sessionCookieFlags()}`);
 }
 
 function clearSession(req, res) {
   const sid = parseCookies(req).session;
   if (sid) sessions.delete(sid);
-  res.setHeader('Set-Cookie', 'session=; Path=/; HttpOnly; Max-Age=0; SameSite=Lax');
+  res.setHeader('Set-Cookie', `session=; ${sessionCookieFlags()}; Max-Age=0`);
 }
 
 function parseBody(req) {
@@ -135,10 +159,7 @@ async function getMoviesForMoodScoring() {
 }
 
 const server = http.createServer(async (req, res) => {
-  res.setHeader('Access-Control-Allow-Origin', req.headers.origin || '*');
-  res.setHeader('Access-Control-Allow-Credentials', 'true');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  setCorsHeaders(req, res);
 
   if (req.method === 'OPTIONS') {
     res.writeHead(204);
@@ -150,6 +171,10 @@ const server = http.createServer(async (req, res) => {
   const pathname = parsed.pathname;
 
   try {
+    if (pathname === '/' || pathname === '/api/health') {
+      return sendJson(res, { status: 'ok', service: 'CineMatch API' });
+    }
+
     if (pathname === '/api/auth/register' && req.method === 'POST') {
       const d = await parseBody(req);
       if (!d.email || !d.password || !d.name) {
@@ -454,14 +479,17 @@ async function start() {
   try {
     const [rows] = await pool.query('SELECT COUNT(*) AS count FROM Movies');
     const movieCount = rows[0].count;
-    server.listen(port, () => {
-      console.log(`\n🗄️  CineMatch MySQL backend running at http://localhost:${port}/`);
+    server.listen(port, '0.0.0.0', () => {
+      console.log(`\n🗄️  CineMatch API running on port ${port}`);
       console.log(`✅ Connected to database: ${poolConfig.database}`);
       console.log(`🎬 Movies in database: ${movieCount}`);
+      if (ALLOWED_ORIGINS.length) {
+        console.log(`🌐 Allowed frontend origins: ${ALLOWED_ORIGINS.join(', ')}`);
+      }
     });
   } catch (err) {
     console.error('Failed to connect to MySQL:', err.message);
-    console.error('Make sure MySQL is running (XAMPP) and movie_rec_db exists.');
+    console.error('Check MYSQL_HOST, MYSQL_USER, MYSQL_PASSWORD, MYSQL_DATABASE env vars.');
     process.exit(1);
   }
 }

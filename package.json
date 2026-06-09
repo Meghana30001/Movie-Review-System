@@ -1,7 +1,8 @@
 {
   "name": "movie-review-system",
   "scripts": {
-    "start": "node start.js",
+    "start": "node db-server.js",
+    "dev": "node start.js",
     "frontend": "node server.js",
     "backend": "node db-server.js",
     "backend:mock": "set USE_MOCK_BACKEND=1&& node start.js",

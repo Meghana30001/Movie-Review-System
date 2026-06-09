@@ -1,0 +1,1077 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CineMatch — Movie Recommendation System</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0d0f14;
+    --surface: #161a24;
+    --surface2: #1e2333;
+    --surface3: #252b3d;
+    --accent: #e8b86d;
+    --accent2: #d4705a;
+    --text: #f0eee8;
+    --text2: #9a97a0;
+    --text3: #5a5870;
+    --border: rgba(255,255,255,0.07);
+    --border2: rgba(255,255,255,0.12);
+    --success: #4ec9a4;
+    --danger: #e05757;
+    --radius: 12px;
+    --radius-sm: 8px;
+    --font-body: 'DM Sans', sans-serif;
+    --font-display: 'DM Serif Display', serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: var(--font-body); min-height: 100vh; }
+
+  /* LAYOUT */
+  #app { display: flex; min-height: 100vh; }
+  #sidebar {
+    width: 220px; min-height: 100vh; background: var(--surface);
+    border-right: 1px solid var(--border); position: fixed; top: 0; left: 0;
+    display: flex; flex-direction: column; z-index: 100; transition: transform .3s;
+  }
+  .logo { padding: 24px 20px 16px; font-family: var(--font-display); font-size: 22px; color: var(--accent); letter-spacing: .5px; }
+  .logo span { color: var(--text2); font-size: 12px; display: block; font-family: var(--font-body); margin-top: 2px; }
+  nav { flex: 1; padding: 8px 0; }
+  .nav-item {
+    display: flex; align-items: center; gap: 12px; padding: 10px 20px;
+    color: var(--text2); font-size: 14px; font-weight: 500; cursor: pointer;
+    border-left: 2px solid transparent; transition: all .15s;
+  }
+  .nav-item:hover { color: var(--text); background: var(--surface2); }
+  .nav-item.active { color: var(--accent); border-left-color: var(--accent); background: var(--surface2); }
+  .nav-icon { font-size: 18px; width: 20px; text-align: center; }
+  .nav-section { padding: 16px 20px 6px; font-size: 10px; text-transform: uppercase; letter-spacing: 1.5px; color: var(--text3); }
+
+  #main { margin-left: 220px; flex: 1; min-height: 100vh; }
+  header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 16px 32px; background: var(--surface); border-bottom: 1px solid var(--border);
+    position: sticky; top: 0; z-index: 50;
+  }
+  .search-wrap { position: relative; width: 340px; }
+  .search-wrap input {
+    width: 100%; background: var(--surface2); border: 1px solid var(--border2);
+    color: var(--text); padding: 9px 16px 9px 40px; border-radius: 50px;
+    font-size: 14px; font-family: var(--font-body); outline: none;
+  }
+  .search-wrap input:focus { border-color: var(--accent); }
+  .search-wrap .si { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: var(--text3); }
+  .header-right { display: flex; align-items: center; gap: 12px; }
+  .avatar { width: 36px; height: 36px; border-radius: 50%; background: var(--accent); display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 13px; color: var(--bg); cursor: pointer; }
+  .btn { padding: 8px 18px; border-radius: 8px; font-size: 13px; font-weight: 500; cursor: pointer; border: none; font-family: var(--font-body); transition: all .15s; }
+  .btn-primary { background: var(--accent); color: var(--bg); }
+  .btn-primary:hover { background: #f0c87a; }
+  .btn-outline { background: transparent; color: var(--text); border: 1px solid var(--border2); }
+  .btn-outline:hover { background: var(--surface2); }
+  .btn-danger { background: transparent; color: var(--danger); border: 1px solid var(--danger); }
+  .btn-sm { padding: 5px 12px; font-size: 12px; }
+
+  /* PAGES */
+  .page { display: none; padding: 32px; }
+  .page.active { display: block; }
+  .page-title { font-family: var(--font-display); font-size: 28px; color: var(--text); margin-bottom: 6px; }
+  .page-sub { color: var(--text2); font-size: 14px; margin-bottom: 28px; }
+
+  /* HERO */
+  .hero {
+    background: linear-gradient(135deg, var(--surface) 0%, var(--surface3) 100%);
+    border-radius: var(--radius); padding: 40px 36px; margin-bottom: 36px;
+    border: 1px solid var(--border); position: relative; overflow: hidden;
+  }
+  .hero::after {
+    content: '🎬'; position: absolute; right: 32px; top: 50%; transform: translateY(-50%);
+    font-size: 80px; opacity: .08; pointer-events: none;
+  }
+  .hero h1 { font-family: var(--font-display); font-size: 32px; margin-bottom: 10px; }
+  .hero h1 em { color: var(--accent); font-style: italic; }
+  .hero p { color: var(--text2); max-width: 500px; line-height: 1.6; margin-bottom: 20px; }
+
+  /* SECTION */
+  .section { margin-bottom: 40px; }
+  .section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+  .section-title { font-family: var(--font-display); font-size: 20px; }
+  .section-link { font-size: 13px; color: var(--accent); cursor: pointer; }
+
+  /* MOVIE GRID */
+  .movie-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 16px; }
+  .movie-card {
+    background: var(--surface); border-radius: var(--radius); overflow: hidden;
+    border: 1px solid var(--border); cursor: pointer; transition: transform .2s, border-color .2s;
+    position: relative;
+  }
+  .movie-card:hover { transform: translateY(-4px); border-color: var(--accent); }
+  .btn-watchlist {
+    position: absolute; top: 8px; right: 8px;
+    background: rgba(0,0,0,0.7); border: none; border-radius: 50%;
+    width: 32px; height: 32px; font-size: 16px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    opacity: 0; transition: opacity .2s; z-index: 10; color: #fff;
+  }
+  .movie-card:hover .btn-watchlist { opacity: 1; }
+  .btn-watchlist:hover { background: var(--accent); color: var(--bg); transform: scale(1.1); }
+  .movie-poster { width: 100%; aspect-ratio: 2/3; object-fit: cover; background: var(--surface2); display: block; }
+  .movie-poster-placeholder { width: 100%; aspect-ratio: 2/3; background: var(--surface2); display: flex; align-items: center; justify-content: center; font-size: 36px; }
+  .movie-info { padding: 10px 12px; }
+  .movie-title { font-size: 13px; font-weight: 600; margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .movie-meta { font-size: 11px; color: var(--text2); display: flex; align-items: center; justify-content: space-between; }
+  .stars { color: var(--accent); font-size: 11px; }
+
+  /* TAGS */
+  .tag { display: inline-block; padding: 3px 10px; border-radius: 50px; font-size: 11px; font-weight: 500; background: var(--surface3); color: var(--text2); margin: 2px; }
+  .tag-accent { background: rgba(232,184,109,.15); color: var(--accent); }
+
+  /* FILTERS */
+  .filters { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 24px; }
+  .filter-chip { padding: 6px 16px; border-radius: 50px; font-size: 13px; cursor: pointer; border: 1px solid var(--border2); background: transparent; color: var(--text2); font-family: var(--font-body); transition: all .15s; }
+  .filter-chip:hover, .filter-chip.active { background: var(--accent); color: var(--bg); border-color: var(--accent); font-weight: 600; }
+  select.filter-select {
+    padding: 6px 16px; border-radius: 50px; font-size: 13px; cursor: pointer;
+    border: 1px solid var(--border2); background: var(--surface); color: var(--text2);
+    font-family: var(--font-body); outline: none; appearance: none;
+  }
+
+  /* MODAL */
+  .modal-overlay {
+    display: none; position: fixed; inset: 0; background: rgba(0,0,0,.85);
+    z-index: 200; align-items: center; justify-content: center; padding: 20px;
+  }
+  .modal-overlay.show { display: flex; }
+  .modal {
+    background: var(--surface); border-radius: 16px; width: 100%; max-width: 680px;
+    border: 1px solid var(--border2); overflow: hidden; max-height: 90vh; overflow-y: auto;
+  }
+  .modal-hero { position: relative; height: 200px; overflow: hidden; background: var(--surface2); }
+  .modal-hero img { width: 100%; height: 100%; object-fit: cover; opacity: .6; }
+  .modal-hero-overlay { position: absolute; inset: 0; background: linear-gradient(to top, var(--surface), transparent); }
+  .modal-body { padding: 24px 28px; }
+  .modal-title { font-family: var(--font-display); font-size: 26px; margin-bottom: 6px; }
+  .modal-meta { color: var(--text2); font-size: 13px; margin-bottom: 16px; }
+  .modal-synopsis { color: var(--text2); line-height: 1.7; font-size: 14px; margin-bottom: 20px; }
+  .modal-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 20px; }
+  .modal-close { position: absolute; top: 12px; right: 16px; font-size: 22px; cursor: pointer; background: rgba(0,0,0,.5); border: none; color: var(--text); width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; z-index: 10; }
+
+  /* RATING */
+  .rating-stars { display: flex; gap: 6px; margin: 12px 0; }
+  .rating-stars .star { font-size: 24px; cursor: pointer; color: var(--text3); transition: color .1s; }
+  .rating-stars .star:hover, .rating-stars .star.active { color: var(--accent); }
+  .rating-input { width: 100%; background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 10px; color: var(--text); font-family: var(--font-body); font-size: 13px; resize: vertical; min-height: 80px; outline: none; }
+
+  /* CARDS (stats) */
+  .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 16px; margin-bottom: 28px; }
+  .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px 16px; text-align: center; }
+  .stat-value { font-family: var(--font-display); font-size: 30px; color: var(--accent); }
+  .stat-label { font-size: 12px; color: var(--text2); margin-top: 4px; }
+
+  /* TABLE */
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { text-align: left; padding: 10px 14px; color: var(--text3); font-weight: 500; border-bottom: 1px solid var(--border); text-transform: uppercase; letter-spacing: .8px; font-size: 11px; }
+  td { padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--text2); }
+  tr:hover td { background: var(--surface2); }
+
+  /* AUTH */
+  .auth-wrap { min-height: 100vh; display: flex; align-items: center; justify-content: center; background: var(--bg); }
+  .auth-card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 40px; width: 380px; }
+  .auth-title { font-family: var(--font-display); font-size: 26px; margin-bottom: 6px; text-align: center; }
+  .auth-sub { color: var(--text2); font-size: 13px; text-align: center; margin-bottom: 28px; }
+  .form-group { margin-bottom: 16px; }
+  .form-group label { display: block; font-size: 13px; font-weight: 500; margin-bottom: 6px; color: var(--text2); }
+  .form-group input, .form-group select {
+    width: 100%; background: var(--surface2); border: 1px solid var(--border2);
+    color: var(--text); padding: 10px 14px; border-radius: 8px;
+    font-size: 14px; font-family: var(--font-body); outline: none;
+  }
+  .form-group input:focus, .form-group select:focus { border-color: var(--accent); }
+  .auth-switch { text-align: center; font-size: 13px; color: var(--text2); margin-top: 16px; }
+  .auth-switch a { color: var(--accent); cursor: pointer; }
+
+  /* ALERTS */
+  .alert { padding: 12px 16px; border-radius: 8px; font-size: 13px; margin-bottom: 16px; }
+  .alert-error { background: rgba(224,87,87,.15); color: var(--danger); border: 1px solid rgba(224,87,87,.3); }
+  .alert-success { background: rgba(78,201,164,.12); color: var(--success); border: 1px solid rgba(78,201,164,.3); }
+
+  /* TOAST */
+  #toast { position: fixed; bottom: 24px; right: 24px; background: var(--surface2); border: 1px solid var(--border2); border-radius: 10px; padding: 12px 20px; font-size: 13px; z-index: 500; transform: translateY(80px); opacity: 0; transition: all .3s; }
+  #toast.show { transform: translateY(0); opacity: 1; }
+
+  .badge { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 50px; font-size: 11px; font-weight: 600; }
+  .badge-rec { background: rgba(212,112,90,.15); color: var(--accent2); }
+  .badge-trending { background: rgba(232,184,109,.15); color: var(--accent); }
+  .badge-collab { background: rgba(78,201,164,.12); color: var(--success); }
+
+  /* REVIEWS */
+  .review-card { background: var(--surface2); border-radius: 10px; padding: 14px 16px; margin-bottom: 10px; border: 1px solid var(--border); }
+  .review-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+  .review-author { font-size: 13px; font-weight: 600; }
+  .review-text { font-size: 13px; color: var(--text2); line-height: 1.6; }
+
+  .divider { height: 1px; background: var(--border); margin: 20px 0; }
+
+  .rec-type-bar { display: flex; gap: 8px; margin-bottom: 20px; }
+  .rec-type-btn { padding: 8px 18px; border-radius: 50px; font-size: 13px; cursor: pointer; border: 1px solid var(--border2); background: transparent; color: var(--text2); font-family: var(--font-body); transition: all .15s; }
+  .rec-type-btn.active { background: var(--accent); color: var(--bg); border-color: var(--accent); font-weight: 600; }
+
+  /* LANGUAGE CARDS */
+  .language-card:hover { transform: translateY(-2px); border-color: var(--accent) !important; }
+
+  @media (max-width: 768px) {
+    #sidebar { transform: translateX(-100%); }
+    #main { margin-left: 0; }
+    header { padding: 12px 16px; }
+    .page { padding: 20px 16px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- AUTH SCREEN -->
+<div id="auth-screen" class="auth-wrap">
+  <div class="auth-card">
+    <div class="auth-title">🎬 CineMatch</div>
+    <div class="auth-sub">Your personal movie recommendation engine</div>
+    <div id="auth-alert"></div>
+
+    <!-- LOGIN FORM -->
+    <div id="login-form">
+      <div class="form-group">
+        <label>Email</label>
+        <input type="email" id="login-email" placeholder="you@example.com">
+      </div>
+      <div class="form-group">
+        <label>Password</label>
+        <input type="password" id="login-pass" placeholder="••••••••">
+      </div>
+      <button class="btn btn-primary" style="width:100%;margin-top:8px" onclick="doLogin()">Sign In</button>
+      <div class="auth-switch">Don't have an account? <a onclick="toggleAuth('register')">Register</a></div>
+    </div>
+
+    <!-- REGISTER FORM -->
+    <div id="register-form" style="display:none">
+      <div class="form-group"><label>Full Name</label><input type="text" id="reg-name" placeholder="Your name"></div>
+      <div class="form-group"><label>Email</label><input type="email" id="reg-email" placeholder="you@example.com"></div>
+      <div class="form-group"><label>Password</label><input type="password" id="reg-pass" placeholder="Min 6 chars"></div>
+      <div class="form-group"><label>Age</label><input type="number" id="reg-age" placeholder="25" min="13" max="120"></div>
+      <div class="form-group">
+        <label>Gender</label>
+        <select id="reg-gender"><option value="">Select</option><option>Male</option><option>Female</option><option>Other</option></select>
+      </div>
+      <div class="form-group"><label>Location</label><input type="text" id="reg-location" placeholder="City, Country"></div>
+      <button class="btn btn-primary" style="width:100%;margin-top:8px" onclick="doRegister()">Create Account</button>
+      <div class="auth-switch">Already have an account? <a onclick="toggleAuth('login')">Sign In</a></div>
+    </div>
+  </div>
+</div>
+
+<!-- MAIN APP -->
+<div id="app" style="display:none">
+  <aside id="sidebar">
+    <div class="logo">CineMatch<span>Movie Recommendations</span></div>
+    <nav>
+      <div class="nav-section">Discover</div>
+      <div class="nav-item active" onclick="navigate('home')"><span class="nav-icon">🏠</span> Home</div>
+      <div class="nav-item" onclick="navigate('browse')"><span class="nav-icon">🎞</span> Browse</div>
+      <div class="nav-item" onclick="navigate('languages')"><span class="nav-icon">🗣️</span> Languages</div>
+      <div class="nav-item" onclick="navigate('recommendations')"><span class="nav-icon">✨</span> For You</div>
+      <div class="nav-section">My Library</div>
+      <div class="nav-item" onclick="navigate('watchlist')"><span class="nav-icon">🔖</span> Watchlist</div>
+      <div class="nav-item" onclick="navigate('reviews')"><span class="nav-icon">📝</span> My Reviews</div>
+      <div class="nav-section">Account</div>
+      <div class="nav-item" id="nav-admin" style="display:none" onclick="navigate('admin')"><span class="nav-icon">⚙️</span> Admin Panel</div>
+      <div class="nav-item" onclick="doLogout()"><span class="nav-icon">🚪</span> Sign Out</div>
+    </nav>
+  </aside>
+
+  <div id="main">
+    <header>
+      <div class="search-wrap">
+        <span class="si">🔍</span>
+        <input type="text" id="search-input" placeholder="Search movies, directors, actors…" oninput="handleSearch(this.value)">
+      </div>
+      <div class="header-right">
+        <div class="avatar" id="header-avatar">U</div>
+        <span id="header-name" style="font-size:13px;color:var(--text2)"></span>
+      </div>
+    </header>
+
+    <!-- HOME PAGE -->
+    <div class="page active" id="page-home">
+      <div class="hero">
+        <h1>What will you watch <em>tonight?</em></h1>
+        <p>Personalized recommendations powered by your taste — collaborative filtering, content-based matching, and trending picks.</p>
+        <button class="btn btn-primary" onclick="navigate('recommendations')">Get Recommendations ✨</button>
+      </div>
+      <div class="section">
+        <div class="section-header">
+          <div class="section-title">🔥 Trending Now</div>
+          <div class="section-link" onclick="navigate('browse')">See all →</div>
+        </div>
+        <div class="movie-grid" id="grid-trending"></div>
+      </div>
+      <div class="section">
+        <div class="section-header">
+          <div class="section-title">⭐ Top Rated</div>
+          <div class="section-link" onclick="navigate('browse')">See all →</div>
+        </div>
+        <div class="movie-grid" id="grid-toprated"></div>
+      </div>
+    </div>
+
+    <!-- BROWSE PAGE -->
+    <div class="page" id="page-browse">
+      <div class="page-title">Browse Movies</div>
+      <div class="page-sub">Search, filter, and explore our full catalog</div>
+      <div class="filters" id="genre-filters">
+        <button class="filter-chip active" onclick="filterGenre(this,'')">All</button>
+      </div>
+      <div style="display:flex;gap:10px;margin-bottom:20px;flex-wrap:wrap">
+        <select class="filter-select" onchange="sortMovies(this.value)">
+          <option value="avg_rating">Sort: Top Rated</option>
+          <option value="total_ratings">Sort: Most Rated</option>
+          <option value="release_year">Sort: Newest</option>
+          <option value="title">Sort: A–Z</option>
+          <option value="language">Sort: Language</option>
+        </select>
+        <select class="filter-select" id="language-filter" onchange="filterLanguage(this.value)">
+          <option value="">All Languages</option>
+          <option value="en">English</option>
+          <option value="hi">Hindi</option>
+          <option value="Tamil">Tamil</option>
+          <option value="Telugu">Telugu</option>
+          <option value="Malayalam">Malayalam</option>
+          <option value="Kannada">Kannada</option>
+          <option value="Bengali">Bengali</option>
+          <option value="Marathi">Marathi</option>
+          <option value="Punjabi">Punjabi</option>
+          <option value="Gujarati">Gujarati</option>
+          <option value="ja">Japanese</option>
+          <option value="ko">Korean</option>
+          <option value="fr">French</option>
+          <option value="de">German</option>
+          <option value="it">Italian</option>
+          <option value="es">Spanish</option>
+          <option value="zh">Chinese</option>
+          <option value="pt">Portuguese</option>
+          <option value="ru">Russian</option>
+          <option value="sv">Swedish</option>
+          <option value="th">Thai</option>
+          <option value="tr">Turkish</option>
+        </select>
+        <select class="filter-select" id="country-filter" onchange="filterCountry(this.value)">
+          <option value="">All Countries</option>
+          <option value="India">🇮🇳 India</option>
+          <option value="United States">🇺🇸 United States</option>
+          <option value="Japan">🇯🇵 Japan</option>
+          <option value="South Korea">🇰🇷 South Korea</option>
+          <option value="China">🇨🇳 China</option>
+          <option value="France">🇫🇷 France</option>
+          <option value="Germany">🇩🇪 Germany</option>
+          <option value="Italy">🇮🇹 Italy</option>
+          <option value="Spain">🇪🇸 Spain</option>
+          <option value="Brazil">🇧🇷 Brazil</option>
+          <option value="United Kingdom">🇬🇧 United Kingdom</option>
+          <option value="Russia">🇷🇺 Russia</option>
+          <option value="Canada">🇨🇦 Canada</option>
+          <option value="Australia">🇦🇺 Australia</option>
+          <option value="Thailand">🇹🇭 Thailand</option>
+          <option value="Turkey">🇹🇷 Turkey</option>
+          <option value="Sweden">🇸🇪 Sweden</option>
+          <option value="Norway">🇳🇴 Norway</option>
+          <option value="Mexico">🇲🇽 Mexico</option>
+        </select>
+      </div>
+      <div class="movie-grid" id="grid-browse"></div>
+      <div style="text-align:center;margin-top:24px">
+        <button class="btn btn-outline" onclick="loadMoreMovies()">Load More</button>
+      </div>
+    </div>
+
+    <!-- LANGUAGES PAGE -->
+    <div class="page" id="page-languages">
+      <div class="page-title">🗣️ Browse by Language</div>
+      <div class="page-sub">Explore cinema from different languages and cultures</div>
+      
+      <div class="section">
+        <div class="section-title">Indian Languages</div>
+        <div class="movie-grid" id="grid-indian-languages"></div>
+      </div>
+      
+      <div class="section">
+        <div class="section-title">🌍 International Languages</div>
+        <div class="movie-grid" id="grid-international-languages"></div>
+      </div>
+      
+      <div class="section">
+        <div class="section-title">📊 All Languages</div>
+        <div id="language-stats" style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:20px"></div>
+        <div class="movie-grid" id="grid-all-languages"></div>
+      </div>
+    </div>
+
+    <!-- RECOMMENDATIONS PAGE -->
+    <div class="page" id="page-recommendations">
+      <div class="page-title">✨ For You</div>
+      <div class="page-sub">Personalized picks just for your taste</div>
+      <div class="rec-type-bar">
+        <button class="rec-type-btn active" onclick="switchRec(this,'content')">🎯 Content-Based</button>
+        <button class="rec-type-btn" onclick="switchRec(this,'collaborative')">👥 Collaborative</button>
+        <button class="rec-type-btn" onclick="switchRec(this,'popular')">🏆 Popular</button>
+        <button class="rec-type-btn" onclick="switchRec(this,'trending')">🔥 Trending</button>
+        <button class="rec-type-btn" onclick="switchRec(this,'languages')">🗣️ Languages</button>
+        <button class="rec-type-btn" onclick="switchRec(this,'mood')">🎭 Mood</button>
+      </div>
+      <div id="rec-explanation" style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 18px;font-size:13px;color:var(--text2);margin-bottom:20px;line-height:1.6"></div>
+      <div id="mood-input-section" style="display:none;margin-bottom:20px">
+        <div style="display:flex;gap:10px;margin-bottom:14px">
+          <input type="text" id="mood-input" placeholder="How are you feeling? (e.g., happy, excited, romantic, scared...)" style="flex:1;background:var(--surface2);border:1px solid var(--border2);color:var(--text);padding:12px 18px;border-radius:50px;font-size:14px;font-family:var(--font-body);outline:none" onkeydown="if(event.key==='Enter')searchByMood()" onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border2)'">
+          <button class="btn btn-primary" onclick="searchByMood()" style="border-radius:50px;padding:10px 24px">🎭 Find Movies</button>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="filter-chip" onclick="quickMood('happy')">😊 Happy</button>
+          <button class="filter-chip" onclick="quickMood('sad')">😢 Sad</button>
+          <button class="filter-chip" onclick="quickMood('excited')">🤩 Excited</button>
+          <button class="filter-chip" onclick="quickMood('romantic')">💕 Romantic</button>
+          <button class="filter-chip" onclick="quickMood('scared')">😨 Scared</button>
+          <button class="filter-chip" onclick="quickMood('adventurous')">🧭 Adventurous</button>
+          <button class="filter-chip" onclick="quickMood('relaxed')">😌 Relaxed</button>
+          <button class="filter-chip" onclick="quickMood('angry')">😤 Angry</button>
+          <button class="filter-chip" onclick="quickMood('nostalgic')">🥺 Nostalgic</button>
+          <button class="filter-chip" onclick="quickMood('curious')">🤔 Curious</button>
+          <button class="filter-chip" onclick="quickMood('bored')">😑 Bored</button>
+          <button class="filter-chip" onclick="quickMood('energetic')">⚡ Energetic</button>
+        </div>
+      </div>
+      <div class="movie-grid" id="grid-recommendations"></div>
+    </div>
+
+    <!-- WATCHLIST PAGE -->
+    <div class="page" id="page-watchlist">
+      <div class="page-title">🔖 My Watchlist</div>
+      <div class="page-sub">Movies you want to watch</div>
+      <div class="movie-grid" id="grid-watchlist"></div>
+      <div id="watchlist-empty" style="display:none;text-align:center;padding:48px;color:var(--text2)">
+        <div style="font-size:48px;margin-bottom:12px">🎬</div>
+        <div>Your watchlist is empty. Browse movies and save them here!</div>
+      </div>
+    </div>
+
+    <!-- MY REVIEWS PAGE -->
+    <div class="page" id="page-reviews">
+      <div class="page-title">📝 My Reviews</div>
+      <div class="page-sub">Movies you've rated and reviewed</div>
+      <div id="reviews-list"></div>
+      <div id="reviews-empty" style="display:none;text-align:center;padding:48px;color:var(--text2)">
+        <div style="font-size:48px;margin-bottom:12px">📝</div>
+        <div>You haven't reviewed any movies yet. Rate movies to see your reviews here!</div>
+      </div>
+    </div>
+
+    <!-- ADMIN PAGE -->
+    <div class="page" id="page-admin">
+      <div class="page-title">⚙️ Admin Panel</div>
+      <div class="page-sub">Platform statistics and management</div>
+      <div class="stats-grid" id="admin-stats-grid"></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px">
+        <div>
+          <div class="section-title" style="margin-bottom:14px">Recent Reviews</div>
+          <div id="admin-reviews-table"></div>
+        </div>
+        <div>
+          <div class="section-title" style="margin-bottom:14px">Genre Popularity</div>
+          <div id="admin-genres-table"></div>
+        </div>
+      </div>
+      <div style="margin-top:28px">
+        <div class="section-title" style="margin-bottom:14px">Add New Movie</div>
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:24px">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+            <div class="form-group"><label>Title</label><input type="text" id="add-title" placeholder="Movie title"></div>
+            <div class="form-group"><label>Year</label><input type="number" id="add-year" placeholder="2024"></div>
+            <div class="form-group"><label>Duration (min)</label><input type="number" id="add-duration" placeholder="120"></div>
+            <div class="form-group"><label>Language</label><input type="text" id="add-language" placeholder="English"></div>
+            <div class="form-group"><label>Poster URL</label><input type="text" id="add-poster" placeholder="https://..."></div>
+            <div class="form-group"><label>Trailer URL</label><input type="text" id="add-trailer" placeholder="https://..."></div>
+          </div>
+          <div class="form-group"><label>Synopsis</label><textarea class="rating-input" id="add-synopsis" rows="3" placeholder="Brief description…"></textarea></div>
+          <button class="btn btn-primary" onclick="addMovie()">➕ Add Movie</button>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /main -->
+</div><!-- /app -->
+
+<!-- MOVIE MODAL -->
+<div class="modal-overlay" id="movie-modal" onclick="closeModal(event)">
+  <div class="modal" id="modal-content">
+    <div class="modal-hero" id="modal-hero">
+      <img id="modal-img" src="" alt="">
+      <div class="modal-hero-overlay"></div>
+      <button class="modal-close" onclick="closeModalDirect()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="modal-title" id="modal-title"></div>
+      <div class="modal-meta" id="modal-meta"></div>
+      <div id="modal-genres" style="margin-bottom:14px"></div>
+      <div class="modal-synopsis" id="modal-synopsis"></div>
+      <div class="modal-actions" id="modal-actions"></div>
+      <div class="divider"></div>
+      <div style="font-size:15px;font-weight:600;margin-bottom:12px">Rate This Movie</div>
+      <div class="rating-stars" id="modal-stars">
+        <span class="star" onclick="setRating(1)" onmouseover="hoverRating(1)" onmouseout="unhoverRating()">★</span>
+        <span class="star" onclick="setRating(2)" onmouseover="hoverRating(2)" onmouseout="unhoverRating()">★</span>
+        <span class="star" onclick="setRating(3)" onmouseover="hoverRating(3)" onmouseout="unhoverRating()">★</span>
+        <span class="star" onclick="setRating(4)" onmouseover="hoverRating(4)" onmouseout="unhoverRating()">★</span>
+        <span class="star" onclick="setRating(5)" onmouseover="hoverRating(5)" onmouseout="unhoverRating()">★</span>
+      </div>
+      <textarea class="rating-input" id="review-text" placeholder="Write a review (optional)…" style="margin-bottom:10px"></textarea>
+      <button class="btn btn-primary btn-sm" onclick="submitRating()">Submit Rating</button>
+      <div class="divider"></div>
+      <div style="font-size:15px;font-weight:600;margin-bottom:12px">Reviews</div>
+      <div id="modal-reviews"></div>
+      <div class="divider"></div>
+      <div style="font-size:15px;font-weight:600;margin-bottom:12px">Similar Movies</div>
+      <div class="movie-grid" id="modal-similar" style="grid-template-columns:repeat(auto-fill,minmax(120px,1fr))"></div>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+const API = '/api';
+let currentUser = null;
+let selectedRating = 0;
+let currentMovieId = null;
+let browseState = { page: 1, genre: '', language: '', country: '', sort: 'avg_rating' };
+let searchTimeout;
+
+// ─── INIT ───────────────────────────────────────────────────
+async function init() {
+  try {
+    const res = await fetch(`${API}/auth/me`, { credentials: 'include' });
+    if (res.ok) {
+      currentUser = await res.json();
+      showApp();
+    }
+  } catch {}
+}
+
+function showApp() {
+  document.getElementById('auth-screen').style.display = 'none';
+  document.getElementById('app').style.display = 'flex';
+  document.getElementById('header-avatar').textContent = currentUser.name[0].toUpperCase();
+  document.getElementById('header-name').textContent = currentUser.name;
+  if (currentUser.role === 'admin') document.getElementById('nav-admin').style.display = 'flex';
+  loadHome();
+}
+
+// ─── NAVIGATION ─────────────────────────────────────────────
+function navigate(page) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById(`page-${page}`).classList.add('active');
+  document.querySelector(`[onclick="navigate('${page}')"]`)?.classList.add('active');
+  const loaders = { browse: loadBrowse, languages: loadLanguages, recommendations: loadRecommendations, watchlist: loadWatchlist, reviews: loadMyReviews, admin: loadAdmin };
+  if (loaders[page]) loaders[page]();
+}
+
+// ─── AUTH ────────────────────────────────────────────────────
+function toggleAuth(type) {
+  document.getElementById('login-form').style.display = type === 'login' ? 'block' : 'none';
+  document.getElementById('register-form').style.display = type === 'register' ? 'block' : 'none';
+  document.getElementById('auth-alert').innerHTML = '';
+}
+
+async function doLogin() {
+  const email = document.getElementById('login-email').value;
+  const password = document.getElementById('login-pass').value;
+  try {
+    const res = await fetch(`${API}/auth/login`, { method: 'POST', credentials: 'include', headers: {'Content-Type':'application/json'}, body: JSON.stringify({email, password}) });
+    const d = await res.json();
+    if (!res.ok) return showAuthError(d.error);
+    currentUser = d.user;
+    showApp();
+  } catch { showAuthError('Connection error'); }
+}
+
+async function doRegister() {
+  const body = { name: v('reg-name'), email: v('reg-email'), password: v('reg-pass'), age: +v('reg-age') || null, gender: v('reg-gender'), location: v('reg-location') };
+  try {
+    const res = await fetch(`${API}/auth/register`, { method: 'POST', credentials: 'include', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
+    const d = await res.json();
+    if (!res.ok) return showAuthError(d.error);
+    showAuthError('Registered! Please sign in.', true);
+    toggleAuth('login');
+  } catch { showAuthError('Connection error'); }
+}
+
+async function doLogout() {
+  await fetch(`${API}/auth/logout`, { method: 'POST', credentials: 'include' });
+  location.reload();
+}
+
+function showAuthError(msg, success = false) {
+  document.getElementById('auth-alert').innerHTML = `<div class="alert ${success?'alert-success':'alert-error'}">${msg}</div>`;
+}
+
+// ─── HOME ────────────────────────────────────────────────────
+async function loadHome() {
+  const [trending, topRated] = await Promise.all([
+    fetch(`${API}/movies/trending`, {credentials:'include'}).then(r=>r.json()),
+    fetch(`${API}/movies/top-rated`, {credentials:'include'}).then(r=>r.json())
+  ]);
+  renderGrid('grid-trending', trending.slice(0,6));
+  renderGrid('grid-toprated', topRated.slice(0,6));
+}
+
+// ─── BROWSE ──────────────────────────────────────────────────
+async function loadBrowse() {
+  browseState = { page: 1, genre: '', language: '', country: '', sort: 'avg_rating' };
+  // Load genres for chips
+  const genres = await fetch(`${API}/genres`, {credentials:'include'}).then(r=>r.json());
+  const fc = document.getElementById('genre-filters');
+  fc.innerHTML = '<button class="filter-chip active" onclick="filterGenre(this,\'\')">All</button>';
+  genres.forEach(g => fc.innerHTML += `<button class="filter-chip" onclick="filterGenre(this,'${g.genre_name}')">${g.genre_name}</button>`);
+  fetchBrowse();
+}
+
+async function fetchBrowse(reset = true) {
+  const { page, genre, language, country, sort } = browseState;
+  let url = `${API}/movies?page=${page}&sort=${sort}&limit=20`;
+  if (genre)    url += `&genre=${encodeURIComponent(genre)}`;
+  if (language) url += `&language=${encodeURIComponent(language)}`;
+  if (country)  url += `&country=${encodeURIComponent(country)}`;
+  const data = await fetch(url, {credentials:'include'}).then(r=>r.json());
+  if (reset) renderGrid('grid-browse', data.movies || []);
+  else appendGrid('grid-browse', data.movies || []);
+}
+
+function filterGenre(el, genre) {
+  document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
+  el.classList.add('active');
+  browseState.genre = genre; browseState.page = 1;
+  fetchBrowse();
+}
+
+function filterLanguage(lang) { browseState.language = lang; browseState.page = 1; fetchBrowse(); }
+function filterCountry(country) { browseState.country = country; browseState.page = 1; fetchBrowse(); }
+function sortMovies(sort)      { browseState.sort = sort; browseState.page = 1; fetchBrowse(); }
+function loadMoreMovies()      { browseState.page++; fetchBrowse(false); }
+
+async function browseByLanguage(lang) {
+  browseState = { page: 1, genre: '', language: lang, country: '', sort: 'avg_rating' };
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('page-browse').classList.add('active');
+  document.querySelector(`[onclick="navigate('browse')"]`)?.classList.add('active');
+  const genres = await fetch(`${API}/genres`, {credentials:'include'}).then(r=>r.json());
+  const fc = document.getElementById('genre-filters');
+  fc.innerHTML = `<button class="filter-chip active" onclick="filterGenre(this,'')">All</button>`;
+  genres.forEach(g => fc.innerHTML += `<button class="filter-chip" onclick="filterGenre(this,'${g.genre_name}')">${g.genre_name}</button>`);
+  document.getElementById('language-filter').value = lang;
+  fetchBrowse();
+}
+
+// ─── RECOMMENDATIONS ─────────────────────────────────────────
+const REC_INFO = {
+  content: '🎯 <b>Content-based filtering</b> — Recommends movies that share genres and themes with films you rated highly. Pure taste match.',
+  collaborative: '👥 <b>Collaborative filtering</b> — Finds users with similar rating patterns to yours and surfaces their top-rated films you haven\'t seen yet.',
+  popular: '🏆 <b>Popularity-based</b> — The highest-rated movies across all users, sorted by average score and vote count. A reliable baseline.',
+  trending: '🔥 <b>Trending</b> — Movies with the most ratings and activity in the last 30 days. What everyone\'s watching right now.',
+  languages: '🗣️ <b>Language diversity</b> — Movies from different languages and cultures around the world. Explore global cinema!',
+  mood: '🎭 <b>Mood-based</b> — Tell us how you\'re feeling and we\'ll find the perfect movies to match your mood! Type a mood or pick one below.'
+};
+
+async function loadRecommendations(type = 'content') {
+  document.getElementById('rec-explanation').innerHTML = REC_INFO[type];
+  const res = await fetch(`${API}/recommendations/${type}`, {credentials:'include'}).then(r=>r.json());
+  renderGrid('grid-recommendations', res.length ? res : [], type);
+  if (!res.length) document.getElementById('grid-recommendations').innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:32px;color:var(--text2)">Rate some movies to get personalized recommendations!</div>';
+}
+
+function switchRec(btn, type) {
+  document.querySelectorAll('.rec-type-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  const moodSection = document.getElementById('mood-input-section');
+  if (type === 'mood') {
+    moodSection.style.display = 'block';
+    document.getElementById('rec-explanation').innerHTML = REC_INFO.mood;
+    document.getElementById('grid-recommendations').innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:32px;color:var(--text2)">Select a mood or type how you\'re feeling to get personalized recommendations!</div>';
+  } else {
+    moodSection.style.display = 'none';
+    loadRecommendations(type);
+  }
+}
+
+async function searchByMood() {
+  const mood = document.getElementById('mood-input').value.trim();
+  if (!mood) return showToast('Please enter your mood');
+  const res = await fetch(`${API}/recommendations/mood`, {
+    method: 'POST', credentials: 'include',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ mood })
+  }).then(r => r.json());
+  document.getElementById('rec-explanation').innerHTML = `🎭 <b>Mood: "${mood}"</b> — Found <b>${(res.movies || []).length} movies</b> matching genres: <span class="tag tag-accent">${res.matched_genres.join('</span> <span class="tag tag-accent">')}</span>`;
+  renderGrid('grid-recommendations', res.movies || []);
+  if (!(res.movies || []).length) {
+    document.getElementById('grid-recommendations').innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:32px;color:var(--text2)">No movies found for this mood. Try a different mood!</div>';
+  }
+}
+
+function quickMood(mood) {
+  document.getElementById('mood-input').value = mood;
+  searchByMood();
+}
+
+// ─── WATCHLIST / HISTORY ─────────────────────────────────────
+async function loadWatchlist() {
+  const data = await fetch(`${API}/watchlist`, {credentials:'include'}).then(r=>r.json());
+  document.getElementById('watchlist-empty').style.display = data.length ? 'none' : 'block';
+  renderGrid('grid-watchlist', data);
+}
+
+async function loadMyReviews() {
+  const data = await fetch(`${API}/user/reviews`, {credentials:'include'}).then(r=>r.json());
+  const list = document.getElementById('reviews-list');
+  const empty = document.getElementById('reviews-empty');
+  if (!data.length) {
+    list.innerHTML = '';
+    empty.style.display = 'block';
+    return;
+  }
+  empty.style.display = 'none';
+  list.innerHTML = data.map(r => `
+    <div class="review-card" style="cursor:pointer" onclick="openMovie(${r.movie_id})">
+      <div class="review-header">
+        <div style="display:flex;align-items:center;gap:12px">
+          <span style="font-size:24px">🎬</span>
+          <div>
+            <div class="review-author">${r.movie_title}</div>
+            <div style="font-size:11px;color:var(--text3)">${r.movie_year || ''} • ${getLanguageName(r.movie_language)}</div>
+          </div>
+        </div>
+        <span class="stars">${'★'.repeat(r.score)}${'☆'.repeat(5 - r.score)}</span>
+      </div>
+      <div class="review-text" style="margin-top:8px">${r.review_text || '<i>No written review</i>'}</div>
+      <div style="font-size:11px;color:var(--text3);margin-top:6px">${new Date(r.created_at).toLocaleDateString()}</div>
+    </div>
+  `).join('');
+}
+
+// ─── LANGUAGES PAGE ───────────────────────────────────────────
+async function loadLanguages() {
+  // Load Indian languages
+  const indianLanguages = await fetch(`${API}/movies/indian-languages`, {credentials:'include'}).then(r=>r.json());
+  renderLanguageCards('grid-indian-languages', indianLanguages, 'indian');
+  
+  // Load international languages
+  const allLanguages = await fetch(`${API}/movies/languages`, {credentials:'include'}).then(r=>r.json());
+  const indianLangNames = ['hi', 'ta', 'te', 'ml', 'kn', 'bn', 'mr', 'pa', 'gu', 'as', 'or', 'Hindi', 'Tamil', 'Telugu', 'Malayalam', 'Kannada', 'Bengali', 'Marathi', 'Punjabi', 'Gujarati', 'Assamese', 'Odia'];
+  const internationalLanguages = allLanguages.filter(l => !indianLangNames.includes(l.language));
+  renderLanguageCards('grid-international-languages', internationalLanguages.slice(0, 8), 'international');
+  
+  // Show language statistics
+  const stats = document.getElementById('language-stats');
+  const totalMovies = allLanguages.reduce((sum, l) => sum + l.count, 0);
+  const topLanguages = allLanguages.sort((a, b) => b.count - a.count).slice(0, 5);
+  
+  stats.innerHTML = `
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:16px;margin-bottom:16px">
+      <div style="text-align:center">
+        <div style="font-size:24px;font-weight:600;color:var(--accent)">${totalMovies}</div>
+        <div style="font-size:12px;color:var(--text2)">Total Movies</div>
+      </div>
+      <div style="text-align:center">
+        <div style="font-size:24px;font-weight:600;color:var(--accent)">${allLanguages.length}</div>
+        <div style="font-size:12px;color:var(--text2)">Languages</div>
+      </div>
+      <div style="text-align:center">
+        <div style="font-size:24px;font-weight:600;color:var(--accent)">${indianLanguages.length}</div>
+        <div style="font-size:12px;color:var(--text2)">Indian Languages</div>
+      </div>
+    </div>
+    <div style="font-size:13px;color:var(--text2)">
+      <strong>Top Languages:</strong> ${topLanguages.map(l => `${l.language} (${l.count})`).join(', ')}
+    </div>
+  `;
+  
+  // Load sample movies from all languages
+  const sampleMovies = [];
+  allLanguages.slice(0, 12).forEach(lang => {
+    if (lang.movies && lang.movies.length > 0) {
+      sampleMovies.push(lang.movies[0]);
+    }
+  });
+  renderGrid('grid-all-languages', sampleMovies);
+}
+
+function renderLanguageCards(id, languages, type) {
+  const el = document.getElementById(id);
+  el.innerHTML = '';
+  
+  languages.forEach(lang => {
+    const card = document.createElement('div');
+    card.className = 'language-card';
+    card.style.cssText = `
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px;
+      cursor: pointer;
+      transition: all .2s;
+      text-align: center;
+    `;
+    
+    const indianScripts = {
+      'hi':'हिं','Hindi':'हिं','ta':'தமி','Tamil':'தமி','te':'తెలు','Telugu':'తెలు',
+      'ml':'മല','Malayalam':'മല','kn':'ಕನ್','Kannada':'ಕನ್','bn':'বাং','Bengali':'বাং',
+      'mr':'मरा','Marathi':'मरा','pa':'ਪੰਜ','Punjabi':'ਪੰਜ','gu':'ગુજ','Gujarati':'ગુજ',
+      'as':'অস','Assamese':'অস','or':'ଓଡ଼','Odia':'ଓଡ଼'
+    };
+    const intlScripts = {
+      'en':'Eng','English':'Eng','ja':'日本','Japanese':'日本','ko':'한국','Korean':'한국',
+      'fr':'Fra','French':'Fra','de':'Deu','German':'Deu','it':'Ita','Italian':'Ita',
+      'es':'Esp','Spanish':'Esp','zh':'中文','Chinese':'中文','pt':'Por','Portuguese':'Por',
+      'ru':'Рус','Russian':'Рус','sv':'Sve','Swedish':'Sve','th':'ไทย','Thai':'ไทย',
+      'tr':'Tür','Turkish':'Tür','no':'Nor','Norwegian':'Nor','da':'Dan','Danish':'Dan',
+      'nl':'Ned','Dutch':'Ned','pl':'Pol','Polish':'Pol','ar':'عرب','Arabic':'عرب','he':'עבר','Hebrew':'עבר'
+    };
+    const flag = type === 'indian' ? (indianScripts[lang.language] || 'हिं') : (intlScripts[lang.language] || lang.language.slice(0,3));
+    const topMovie = lang.movies && lang.movies.length > 0 ? lang.movies[0] : null;
+    
+    card.innerHTML = `
+      <div style="font-size:24px;margin-bottom:8px">${flag}</div>
+      <div style="font-weight:600;margin-bottom:4px">${getLanguageName(lang.language)}</div>
+      <div style="font-size:12px;color:var(--text2);margin-bottom:8px">${lang.count} movies</div>
+      ${topMovie ? `
+        <div style="font-size:11px;color:var(--text2);margin-bottom:8px">
+          Top: ${topMovie.title}
+        </div>
+      ` : ''}
+      <button class="btn btn-primary btn-sm" onclick="event.stopPropagation(); browseByLanguage('${lang.language}')">
+        Browse
+      </button>
+    `;
+    
+    card.onmouseover = () => card.style.borderColor = 'var(--accent)';
+    card.onmouseout = () => card.style.borderColor = 'var(--border)';
+    
+    el.appendChild(card);
+  });
+}
+
+// ─── MOVIE GRID RENDER ────────────────────────────────────────
+function renderGrid(id, movies, recType) {
+  const el = document.getElementById(id);
+  el.innerHTML = movies.map(m => movieCard(m, recType)).join('');
+}
+
+function appendGrid(id, movies, recType) {
+  const el = document.getElementById(id);
+  el.innerHTML += movies.map(m => movieCard(m, recType)).join('');
+}
+
+function movieCard(m, recType) {
+  const stars = '★'.repeat(Math.round(m.avg_rating || 0)) + '☆'.repeat(5 - Math.round(m.avg_rating || 0));
+  const badge = recType ? `<span class="badge badge-${recType}">${recType === 'collaborative' ? '👥' : recType === 'trending' ? '🔥' : recType === 'popular' ? '🏆' : '🎯'}</span>` : '';
+  const languageTag = m.language ? `<span class="tag">${getLanguageName(m.language)}</span>` : '';
+  const countryFlag = m.country_code ? getCountryFlag(m.country_code) : '';
+  const img = m.poster_url
+    ? `<img class="movie-poster" src="${m.poster_url}" alt="${m.title}" onerror="this.style.display='none';this.nextSibling.style.display='flex'">`
+    : '';
+  return `
+  <div class="movie-card" onclick="openMovie(${m.movie_id})">
+    <button class="btn-watchlist" onclick="event.stopPropagation(); toggleWatchlist(${m.movie_id})" title="Save to Watchlist">🔖</button>
+    ${img}<div class="movie-poster-placeholder" style="${m.poster_url?'display:none':''}">🎬</div>
+    <div class="movie-info">
+      <div class="movie-title">${m.title}</div>
+      <div class="movie-meta">
+        <span class="stars">${stars}</span>
+        <span>${m.release_year || '—'} ${badge}</span>
+      </div>
+      <div style="margin-top:4px;display:flex;gap:4px;align-items:center;flex-wrap:wrap">
+        ${languageTag}
+        ${countryFlag ? `<span style="font-size:12px">${countryFlag}</span>` : ''}
+      </div>
+    </div>
+  </div>`;
+}
+
+// ─── MOVIE MODAL ─────────────────────────────────────────────
+async function openMovie(id) {
+  currentMovieId = id; selectedRating = 0;
+  document.querySelectorAll('.star').forEach(s => s.classList.remove('active'));
+  document.getElementById('review-text').value = '';
+  document.getElementById('movie-modal').classList.add('show');
+
+  const m = await fetch(`${API}/movies/${id}`, {credentials:'include'}).then(r=>r.json());
+  document.getElementById('modal-img').src = m.poster_url || '';
+  document.getElementById('modal-title').textContent = m.title;
+  document.getElementById('modal-meta').textContent = `${m.release_year || ''}  •  ${m.duration ? m.duration+'min' : ''}  •  ${m.language || ''}  •  ★ ${(m.avg_rating||0).toFixed(1)} (${m.total_ratings} ratings)`;
+  document.getElementById('modal-synopsis').textContent = m.synopsis || 'No synopsis available.';
+  document.getElementById('modal-genres').innerHTML = (m.genres||'').split(', ').map(g=>`<span class="tag tag-accent">${g}</span>`).join('');
+
+  const wlBtn = `<button class="btn btn-outline btn-sm" onclick="toggleWatchlist(${id})">🔖 Watchlist</button>`;
+  const wchBtn = `<button class="btn btn-outline btn-sm" onclick="markWatched(${id})">✅ Mark Watched</button>`;
+  document.getElementById('modal-actions').innerHTML = wlBtn + wchBtn;
+
+  // Reviews
+  const revEl = document.getElementById('modal-reviews');
+  if (m.reviews?.length) {
+    revEl.innerHTML = m.reviews.slice(0,5).map(r=>`
+      <div class="review-card">
+        <div class="review-header">
+          <span class="review-author">${r.reviewer}</span>
+          <span class="stars">${'★'.repeat(r.score)}${'☆'.repeat(5-r.score)}</span>
+        </div>
+        <div class="review-text">${r.review_text || '<i>No text review</i>'}</div>
+      </div>`).join('');
+  } else { revEl.innerHTML = '<div style="color:var(--text2);font-size:13px">No reviews yet. Be the first!</div>'; }
+
+  // Similar
+  const sim = await fetch(`${API}/movies/${id}/similar`, {credentials:'include'}).then(r=>r.json());
+  renderGrid('modal-similar', sim.slice(0,6));
+}
+
+function closeModal(e) { if (e.target.id === 'movie-modal') closeModalDirect(); }
+function closeModalDirect() { document.getElementById('movie-modal').classList.remove('show'); }
+
+function getCountryFlag(countryCode) {
+  const flags = {
+    'US': '🇺🇸', 'IN': '🇮🇳', 'GB': '🇬🇧', 'JP': '🇯🇵',
+    'KR': '🇰🇷', 'FR': '🇫🇷', 'DE': '🇩🇪', 'IT': '🇮🇹',
+    'ES': '🇪🇸', 'CN': '🇨🇳', 'HK': '🇭🇰', 'RU': '🇷🇺',
+    'MX': '🇲🇽', 'BR': '🇧🇷', 'CA': '🇨🇦', 'AU': '🇦🇺',
+    'TH': '🇹🇭', 'TR': '🇹🇷', 'SE': '🇸🇪', 'NO': '🇳🇴'
+  };
+  return flags[countryCode] || '🌍';
+}
+
+function getLanguageName(languageCode) {
+  const languageNames = {
+    'en': 'English',
+    'hi': 'Hindi',
+    'ta': 'Tamil',
+    'te': 'Telugu',
+    'ml': 'Malayalam',
+    'kn': 'Kannada',
+    'bn': 'Bengali',
+    'mr': 'Marathi',
+    'pa': 'Punjabi',
+    'gu': 'Gujarati',
+    'as': 'Assamese',
+    'or': 'Odia',
+    'ja': 'Japanese',
+    'ko': 'Korean',
+    'fr': 'French',
+    'de': 'German',
+    'it': 'Italian',
+    'es': 'Spanish',
+    'zh': 'Chinese',
+    'pt': 'Portuguese',
+    'ru': 'Russian',
+    'sv': 'Swedish',
+    'th': 'Thai',
+    'tr': 'Turkish',
+    'no': 'Norwegian',
+    'da': 'Danish',
+    'nl': 'Dutch',
+    'pl': 'Polish',
+    'ar': 'Arabic',
+    'he': 'Hebrew'
+  };
+  return languageNames[languageCode] || languageCode;
+}
+
+function hoverRating(n) { document.querySelectorAll('.star').forEach((s,i) => s.style.color = i < n ? '#e8b86d' : ''); }
+function unhoverRating() { document.querySelectorAll('.star').forEach((s,i) => s.style.color = i < selectedRating ? '#e8b86d' : ''); }
+function setRating(n) {
+  selectedRating = n;
+  document.querySelectorAll('.star').forEach((s,i) => { s.classList.toggle('active', i < n); s.style.color = i < n ? '#e8b86d' : ''; });
+}
+
+async function submitRating() {
+  if (!selectedRating) return showToast('Please select a rating (1–5)');
+  const body = { movie_id: currentMovieId, score: selectedRating, review_text: document.getElementById('review-text').value };
+  const res = await fetch(`${API}/ratings`, { method:'POST', credentials:'include', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
+  showToast(res.ok ? '✅ Rating submitted!' : '❌ Error submitting rating');
+  if (res.ok) openMovie(currentMovieId);
+}
+
+async function toggleWatchlist(id) {
+  const res = await fetch(`${API}/watchlist/${id}`, { method:'POST', credentials:'include' });
+  showToast(res.ok ? '🔖 Added to watchlist' : '❌ Already in watchlist');
+}
+
+async function markWatched(id) {
+  const res = await fetch(`${API}/watch-history/${id}`, { method:'POST', credentials:'include', headers:{'Content-Type':'application/json'}, body: JSON.stringify({completion_pct:100}) });
+  showToast(res.ok ? '✅ Marked as watched' : '❌ Error');
+}
+
+// ─── SEARCH ──────────────────────────────────────────────────
+function handleSearch(q) {
+  clearTimeout(searchTimeout);
+  if (q.length < 2) return;
+  searchTimeout = setTimeout(async () => {
+    navigate('browse');
+    const data = await fetch(`${API}/movies?q=${encodeURIComponent(q)}&limit=20`, {credentials:'include'}).then(r=>r.json());
+    renderGrid('grid-browse', data.movies || []);
+  }, 350);
+}
+
+// ─── ADMIN ───────────────────────────────────────────────────
+async function loadAdmin() {
+  const [stats, reviews, genres] = await Promise.all([
+    fetch(`${API}/admin/stats`, {credentials:'include'}).then(r=>r.json()),
+    fetch(`${API}/admin/reviews`, {credentials:'include'}).then(r=>r.json()),
+    fetch(`${API}/genres/popularity`, {credentials:'include'}).then(r=>r.json())
+  ]);
+
+  document.getElementById('admin-stats-grid').innerHTML = [
+    ['Total Users', stats.total_users], ['Total Movies', stats.total_movies],
+    ['Total Ratings', stats.total_ratings], ['Active (7d)', stats.active_7d],
+    ['Platform Avg ★', stats.platform_avg_rating]
+  ].map(([l,v]) => `<div class="stat-card"><div class="stat-value">${v ?? '—'}</div><div class="stat-label">${l}</div></div>`).join('');
+
+  document.getElementById('admin-reviews-table').innerHTML = `<table>
+    <tr><th>Movie</th><th>Reviewer</th><th>Score</th><th></th></tr>
+    ${reviews.slice(0,8).map(r=>`<tr><td>${r.movie}</td><td>${r.reviewer}</td><td>${'★'.repeat(r.score)}</td><td><button class="btn btn-danger btn-sm" onclick="deleteReview(${r.rating_id})">Del</button></td></tr>`).join('')}
+  </table>`;
+
+  document.getElementById('admin-genres-table').innerHTML = `<table>
+    <tr><th>Genre</th><th>Movies</th><th>Avg ★</th></tr>
+    ${genres.slice(0,8).map(g=>`<tr><td>${g.genre_name}</td><td>${g.movie_count}</td><td>${g.avg_genre_rating}</td></tr>`).join('')}
+  </table>`;
+}
+
+async function deleteReview(id) {
+  const res = await fetch(`${API}/admin/reviews/${id}`, {method:'DELETE', credentials:'include'});
+  showToast(res.ok ? '🗑 Review removed' : '❌ Error'); if (res.ok) loadAdmin();
+}
+
+async function addMovie() {
+  const body = { title: v('add-title'), release_year: +v('add-year')||null, duration: +v('add-duration')||null, language: v('add-language')||'English', synopsis: v('add-synopsis'), poster_url: v('add-poster'), trailer_url: v('add-trailer') };
+  if (!body.title) return showToast('Title required');
+  const res = await fetch(`${API}/movies`, {method:'POST', credentials:'include', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
+  showToast(res.ok ? '✅ Movie added!' : '❌ Error adding movie');
+  if (res.ok) { ['add-title','add-year','add-duration','add-language','add-poster','add-trailer','add-synopsis'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; }); }
+}
+
+// ─── UTILS ───────────────────────────────────────────────────
+function v(id) { return document.getElementById(id)?.value?.trim() || ''; }
+let toastTimer;
+function showToast(msg) {
+  const t = document.getElementById('toast'); t.textContent = msg; t.classList.add('show');
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), 2800);
+}
+
+// ─── BOOT ────────────────────────────────────────────────────
+init();
+</script>
+</body>
+</html>

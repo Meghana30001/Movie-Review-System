@@ -36,12 +36,25 @@ const isProduction = process.env.NODE_ENV === 'production' || !!process.env.REND
 const pool = mysql.createPool(poolConfig);
 const sessions = new Map();
 
+function isAllowedOrigin(origin) {
+  if (!origin) return false;
+  if (!ALLOWED_ORIGINS.length) return true;
+  if (ALLOWED_ORIGINS.includes(origin)) return true;
+  try {
+    const host = new URL(origin).hostname;
+    if (isProduction && host.endsWith('.vercel.app')) return true;
+    return ALLOWED_ORIGINS.some((allowed) => new URL(allowed).hostname === host);
+  } catch {
+    return false;
+  }
+}
+
 function setCorsHeaders(req, res) {
   const origin = normalizeOrigin(req.headers.origin);
-  if (!ALLOWED_ORIGINS.length) {
-    res.setHeader('Access-Control-Allow-Origin', origin || '*');
-  } else if (origin && ALLOWED_ORIGINS.includes(origin)) {
+  if (origin && isAllowedOrigin(origin)) {
     res.setHeader('Access-Control-Allow-Origin', origin);
+  } else if (!ALLOWED_ORIGINS.length) {
+    res.setHeader('Access-Control-Allow-Origin', origin || '*');
   } else if (origin && isProduction) {
     console.warn(`CORS blocked origin: ${origin}. Allowed: ${ALLOWED_ORIGINS.join(', ')}`);
   }

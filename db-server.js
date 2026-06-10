@@ -394,12 +394,13 @@ const server = http.createServer(async (req, res) => {
 
     if (pathname === '/api/movies' && req.method === 'GET') {
       const page = parseInt(parsed.query.page || '1', 10);
-      const limit = Math.min(parseInt(parsed.query.limit || '20', 10), 50);
+      const { genre, language, country, year, q: search } = parsed.query;
+      const maxLimit = language && !search ? 200 : 50;
+      const limit = Math.min(parseInt(parsed.query.limit || '20', 10), maxLimit);
       const offset = (page - 1) * limit;
       const sort = ['avg_rating', 'total_ratings', 'release_year', 'title'].includes(parsed.query.sort)
         ? parsed.query.sort : 'avg_rating';
       const order = parsed.query.order === 'asc' ? 'ASC' : 'DESC';
-      const { genre, language, country, year, q: search } = parsed.query;
 
       let sql = 'SELECT DISTINCT m.* FROM Movies m ';
       const params = [];
@@ -442,7 +443,18 @@ const server = http.createServer(async (req, res) => {
       if (search) {
         movies = rankSearchResults(movies, searchTerm).slice(0, limit);
       }
-      return sendJson(res, { movies, page, limit, q: search || undefined });
+
+      let total = movies.length;
+      if (language && !search && !genre && !country && !year) {
+        const codes = resolveLanguageCodes(language);
+        const [countRow] = await query(
+          `SELECT COUNT(*) AS total FROM Movies WHERE language IN (${codes.map(() => '?').join(', ')})`,
+          codes
+        );
+        total = countRow.total;
+      }
+
+      return sendJson(res, { movies, page, limit, total, language: language || undefined, q: search || undefined });
     }
 
     const similarMatch = pathname.match(/^\/api\/movies\/(\d+)\/similar$/);

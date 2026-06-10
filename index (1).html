@@ -329,7 +329,7 @@
         <button class="filter-chip active" onclick="filterGenre(this,'')">All</button>
       </div>
       <div style="display:flex;gap:10px;margin-bottom:20px;flex-wrap:wrap">
-        <select class="filter-select" onchange="sortMovies(this.value)">
+        <select class="filter-select" id="sort-filter" onchange="sortMovies(this.value)">
           <option value="avg_rating">Sort: Top Rated</option>
           <option value="total_ratings">Sort: Most Rated</option>
           <option value="release_year">Sort: Newest</option>
@@ -388,7 +388,7 @@
       </div>
       <div class="movie-grid" id="grid-browse"></div>
       <div style="text-align:center;margin-top:24px">
-        <button class="btn btn-outline" onclick="loadMoreMovies()">Load More</button>
+        <button class="btn btn-outline" id="browse-load-more" onclick="loadMoreMovies()">Load More</button>
       </div>
     </div>
 
@@ -684,24 +684,31 @@ function updateBrowseHeader() {
   const sub = document.getElementById('browse-subtitle');
   if (!sub) return;
   if (browseState.language) {
+    const loaded = document.querySelectorAll('#grid-browse .movie-card').length;
     sub.textContent = browseState.total
-      ? `Showing ${browseState.total} ${getLanguageName(browseState.language)} movies`
+      ? `Showing ${loaded} of ${browseState.total} ${getLanguageName(browseState.language)} movies`
       : `Browsing ${getLanguageName(browseState.language)} movies`;
   } else {
     sub.textContent = 'Search, filter, and explore our full catalog';
   }
 }
 
+function browsePageSize() {
+  return browseState.languageBrowse ? 24 : 20;
+}
+
 function updateLoadMoreButton(loadedCount) {
-  const btn = document.querySelector('#page-browse .btn-outline');
+  const btn = document.getElementById('browse-load-more');
   if (!btn) return;
-  const hasMore = browseState.total ? loadedCount < browseState.total : loadedCount >= (browseState.languageBrowse ? 100 : 20);
+  const hasMore = browseState.total > 0 && loadedCount < browseState.total;
   btn.style.display = hasMore ? 'inline-flex' : 'none';
+  btn.disabled = false;
+  btn.textContent = 'Load More';
 }
 
 async function fetchBrowse(reset = true) {
   const { page, genre, language, country, sort, q } = browseState;
-  const limit = browseState.languageBrowse ? 100 : 20;
+  const limit = browsePageSize();
   let url = `${API}/movies?page=${page}&sort=${sort}&limit=${limit}`;
   if (genre)    url += `&genre=${encodeURIComponent(genre)}`;
   if (language) url += `&language=${encodeURIComponent(language)}`;
@@ -709,41 +716,20 @@ async function fetchBrowse(reset = true) {
   if (q)        url += `&q=${encodeURIComponent(q)}`;
   const data = await fetch(url, { credentials: 'include' }).then(r => r.json());
   const movies = data.movies || [];
-  browseState.total = data.total ?? movies.length;
+  if (typeof data.total === 'number') browseState.total = data.total;
   if (reset) renderGrid('grid-browse', movies);
   else appendGrid('grid-browse', movies);
   updateBrowseHeader();
-  const loaded = reset ? movies.length : document.querySelectorAll('#grid-browse .movie-card').length;
+  const loaded = document.querySelectorAll('#grid-browse .movie-card').length;
   updateLoadMoreButton(loaded);
-}
-
-async function fetchAllLanguageMovies(lang) {
-  browseState = { page: 1, genre: '', language: lang, country: '', sort: 'avg_rating', q: '', total: 0, languageBrowse: true };
-  const limit = 100;
-  let page = 1;
-  let all = [];
-  let total = 0;
-
-  while (true) {
-    const url = `${API}/movies?page=${page}&sort=${browseState.sort}&limit=${limit}&language=${encodeURIComponent(lang)}`;
-    const data = await fetch(url, { credentials: 'include' }).then(r => r.json());
-    const batch = data.movies || [];
-    total = data.total ?? all.length + batch.length;
-    all = all.concat(batch);
-    if (batch.length < limit || all.length >= total) break;
-    page++;
-  }
-
-  browseState.total = total || all.length;
-  renderGrid('grid-browse', all);
-  updateBrowseHeader();
-  updateLoadMoreButton(all.length);
 }
 
 function filterGenre(el, genre) {
   document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
   el.classList.add('active');
-  browseState.genre = genre; browseState.page = 1;
+  browseState.genre = genre;
+  browseState.page = 1;
+  browseState.total = 0;
   fetchBrowse();
 }
 
@@ -751,14 +737,28 @@ function filterLanguage(lang) {
   browseState.language = lang;
   browseState.page = 1;
   browseState.languageBrowse = !!lang;
-  if (lang) fetchAllLanguageMovies(lang);
-  else fetchBrowse();
+  browseState.total = 0;
+  fetchBrowse();
 }
-function filterCountry(country) { browseState.country = country; browseState.page = 1; fetchBrowse(); }
-function sortMovies(sort)      { browseState.sort = sort; browseState.page = 1; fetchBrowse(); }
-function loadMoreMovies()      { browseState.page++; fetchBrowse(false); }
+function filterCountry(country) { browseState.country = country; browseState.page = 1; browseState.total = 0; fetchBrowse(); }
+function sortMovies(sort) {
+  browseState.sort = sort;
+  browseState.page = 1;
+  browseState.total = 0;
+  fetchBrowse();
+}
+async function loadMoreMovies() {
+  const btn = document.getElementById('browse-load-more');
+  if (btn) { btn.disabled = true; btn.textContent = 'Loading…'; }
+  browseState.page++;
+  await fetchBrowse(false);
+}
 
 async function browseByLanguage(lang) {
+  browseState = {
+    page: 1, genre: '', language: lang, country: '', sort: 'avg_rating', q: '',
+    total: 0, languageBrowse: true
+  };
   document.getElementById('search-input').value = '';
   document.getElementById('country-filter').value = '';
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
@@ -770,9 +770,10 @@ async function browseByLanguage(lang) {
   fc.innerHTML = `<button class="filter-chip active" onclick="filterGenre(this,'')">All</button>`;
   genres.forEach(g => fc.innerHTML += `<button class="filter-chip" onclick="filterGenre(this,'${g.genre_name}')">${g.genre_name}</button>`);
   document.getElementById('language-filter').value = lang;
+  document.getElementById('sort-filter').value = 'avg_rating';
   document.getElementById('browse-subtitle').textContent = `Loading ${getLanguageName(lang)} movies…`;
   renderGrid('grid-browse', []);
-  await fetchAllLanguageMovies(lang);
+  await fetchBrowse();
 }
 
 // ─── RECOMMENDATIONS ─────────────────────────────────────────
@@ -1182,7 +1183,7 @@ function handleSearch(q) {
   }
   searchTimeout = setTimeout(async () => {
     showBrowsePage();
-    browseState = { page: 1, genre: '', language: '', country: '', sort: 'avg_rating', q: trimmed };
+    browseState = { page: 1, genre: '', language: '', country: '', sort: 'avg_rating', q: trimmed, total: 0, languageBrowse: false };
     await ensureBrowseGenres();
     fetchBrowse();
   }, 350);

@@ -428,29 +428,30 @@ const server = http.createServer(async (req, res) => {
         if (year) { conditions.push('m.release_year = ?'); params.push(year); }
       }
 
-      if (conditions.length) sql += `WHERE ${conditions.join(' AND ')} `;
-      if (search) {
-        sql += 'ORDER BY m.avg_rating DESC LIMIT ? OFFSET ?';
-      } else {
-        sql += `ORDER BY m.${sort} ${order} LIMIT ? OFFSET ?`;
-      }
-      const fetchLimit = search ? Math.min(limit * 4, 200) : limit;
-      params.push(fetchLimit, search ? 0 : offset);
+      const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')} ` : '';
+      const orderClause = search
+        ? 'ORDER BY m.avg_rating DESC, m.total_ratings DESC, m.title ASC'
+        : `ORDER BY m.${sort} ${order}, m.total_ratings DESC, m.title ASC`;
 
-      let movies = await query(sql, params);
+      if (conditions.length) sql += whereClause;
+      sql += `${orderClause} LIMIT ? OFFSET ?`;
+
+      const fetchLimit = search ? Math.min(limit * 4, 200) : limit;
+      const queryParams = [...params, fetchLimit, search ? 0 : offset];
+
+      let movies = await query(sql, queryParams);
       await attachGenres(movies);
-      movies = prepareMovies(movies);
+      movies = prepareMovies(movies, { dedupe: !language });
       if (search) {
         movies = rankSearchResults(movies, searchTerm).slice(0, limit);
       }
 
       let total = movies.length;
-      if (language && !search && !genre && !country && !year) {
-        const codes = resolveLanguageCodes(language);
-        const [countRow] = await query(
-          `SELECT COUNT(*) AS total FROM Movies WHERE language IN (${codes.map(() => '?').join(', ')})`,
-          codes
-        );
+      if (!search) {
+        let countSql = 'SELECT COUNT(DISTINCT m.movie_id) AS total FROM Movies m ';
+        if (genre) countSql += 'JOIN Movie_Genres mg ON m.movie_id = mg.movie_id JOIN Genres g ON mg.genre_id = g.genre_id ';
+        countSql += whereClause;
+        const [countRow] = await query(countSql, params);
         total = countRow.total;
       }
 

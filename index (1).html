@@ -923,6 +923,17 @@ function movieCard(m, recType) {
 }
 
 // ─── MOVIE MODAL ─────────────────────────────────────────────
+function posterUrl(url, title) {
+  if (url && url.startsWith('http')) return url;
+  const t = encodeURIComponent((title || 'Movie').slice(0, 40));
+  return `https://placehold.co/1200x400/161a24/e8b86d?text=${t}`;
+}
+
+function parseMovieGenres(genres) {
+  if (Array.isArray(genres)) return genres;
+  return (genres || '').split(',').map(g => g.trim()).filter(Boolean);
+}
+
 async function openMovie(id) {
   currentMovieId = id; selectedRating = 0;
   document.querySelectorAll('.star').forEach(s => s.classList.remove('active'));
@@ -930,11 +941,20 @@ async function openMovie(id) {
   document.getElementById('movie-modal').classList.add('show');
 
   const m = await fetch(`${API}/movies/${id}`, {credentials:'include'}).then(r=>r.json());
-  document.getElementById('modal-img').src = m.poster_url || '';
+  if (m.error) {
+    showToast(m.error || 'Could not load movie');
+    closeModalDirect();
+    return;
+  }
+
+  const modalImg = document.getElementById('modal-img');
+  modalImg.src = posterUrl(m.poster_url, m.title);
+  modalImg.alt = m.title || 'Movie poster';
+  modalImg.onerror = () => { modalImg.src = posterUrl('', m.title); };
   document.getElementById('modal-title').textContent = m.title;
   document.getElementById('modal-meta').textContent = `${m.release_year || ''}  •  ${m.duration ? m.duration+'min' : ''}  •  ${m.language || ''}  •  ★ ${(m.avg_rating||0).toFixed(1)} (${m.total_ratings} ratings)`;
   document.getElementById('modal-synopsis').textContent = m.synopsis || 'No synopsis available.';
-  document.getElementById('modal-genres').innerHTML = (m.genres||'').split(', ').map(g=>`<span class="tag tag-accent">${g}</span>`).join('');
+  document.getElementById('modal-genres').innerHTML = parseMovieGenres(m.genres).map(g=>`<span class="tag tag-accent">${g}</span>`).join('');
 
   const wlBtn = `<button class="btn btn-outline btn-sm" onclick="toggleWatchlist(${id})">🔖 Watchlist</button>`;
   const wchBtn = `<button class="btn btn-outline btn-sm" onclick="markWatched(${id})">✅ Mark Watched</button>`;

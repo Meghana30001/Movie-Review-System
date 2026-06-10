@@ -165,6 +165,41 @@ const SQL_GENRE_POPULARITY = `
   ORDER BY total_votes DESC
 `;
 
+const SQL_MOVIE_BY_ID = `
+  SELECT m.*,
+    (SELECT GROUP_CONCAT(DISTINCT g.genre_name ORDER BY g.genre_name SEPARATOR ', ')
+     FROM Movie_Genres mg
+     JOIN Genres g ON mg.genre_id = g.genre_id
+     WHERE mg.movie_id = m.movie_id) AS genres,
+    (SELECT GROUP_CONCAT(DISTINCT p.name ORDER BY p.name SEPARATOR ', ')
+     FROM Movie_Cast mc
+     JOIN People p ON mc.person_id = p.person_id
+     WHERE mc.movie_id = m.movie_id AND mc.role_type = 'Director') AS directors,
+    (SELECT GROUP_CONCAT(DISTINCT p.name ORDER BY p.name SEPARATOR ', ')
+     FROM Movie_Cast mc
+     JOIN People p ON mc.person_id = p.person_id
+     WHERE mc.movie_id = m.movie_id AND mc.role_type = 'Actor') AS cast_members
+  FROM Movies m
+  WHERE m.movie_id = ?
+`;
+
+const SQL_SIMILAR_MOVIES = `
+  SELECT DISTINCT m.movie_id, m.title, m.release_year, m.avg_rating,
+         m.total_ratings, m.poster_url,
+         (SELECT GROUP_CONCAT(DISTINCT g.genre_name ORDER BY g.genre_name SEPARATOR ', ')
+          FROM Movie_Genres mg2
+          JOIN Genres g ON mg2.genre_id = g.genre_id
+          WHERE mg2.movie_id = m.movie_id) AS genres
+  FROM Movies m
+  JOIN Movie_Genres mg ON m.movie_id = mg.movie_id
+  WHERE mg.genre_id IN (
+    SELECT genre_id FROM Movie_Genres WHERE movie_id = ?
+  )
+  AND m.movie_id != ?
+  ORDER BY m.avg_rating DESC
+  LIMIT ?
+`;
+
 async function callProc(name, args = []) {
   const placeholders = args.map(() => '?').join(', ');
   const [rows] = await pool.query(`CALL ${name}(${placeholders})`, args);
@@ -377,14 +412,20 @@ const server = http.createServer(async (req, res) => {
 
     const similarMatch = pathname.match(/^\/api\/movies\/(\d+)\/similar$/);
     if (similarMatch) {
-      const rows = prepareMovies(await callProc('get_because_you_watched', [parseInt(similarMatch[1], 10), 8]));
-      return sendJson(res, rows);
+      const movieId = parseInt(similarMatch[1], 10);
+      let rows;
+      try {
+        rows = await callProc('get_because_you_watched', [movieId, 8]);
+      } catch {
+        rows = await query(SQL_SIMILAR_MOVIES, [movieId, movieId, 8]);
+      }
+      return sendJson(res, prepareMovies(rows));
     }
 
     const movieMatch = pathname.match(/^\/api\/movies\/(\d+)$/);
     if (movieMatch && req.method === 'GET') {
       const movieId = parseInt(movieMatch[1], 10);
-      const rows = await query('SELECT * FROM vw_movie_full WHERE movie_id = ?', [movieId]);
+      const rows = await query(SQL_MOVIE_BY_ID, [movieId]);
       if (!rows.length) return sendJson(res, { error: 'Movie not found' }, 404);
       const movie = rows[0];
       movie.awards = await query('SELECT * FROM Awards WHERE movie_id = ?', [movieId]);

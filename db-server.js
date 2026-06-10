@@ -226,6 +226,35 @@ async function attachGenres(movies) {
   return movies;
 }
 
+async function getSimilarMovies(movieId, limit = 8) {
+  let rows = [];
+  try {
+    rows = await callProc('get_because_you_watched', [movieId, limit]);
+  } catch {
+    rows = await query(SQL_SIMILAR_MOVIES, [movieId, movieId, limit]);
+  }
+  if (!rows.length) {
+    const [movie] = await query('SELECT language FROM Movies WHERE movie_id = ?', [movieId]);
+    if (movie?.language) {
+      rows = await query(
+        `SELECT movie_id, title, release_year, avg_rating, total_ratings, poster_url, language
+         FROM Movies WHERE language = ? AND movie_id != ?
+         ORDER BY avg_rating DESC, total_ratings DESC LIMIT ?`,
+        [movie.language, movieId, limit]
+      );
+    }
+  }
+  if (!rows.length) {
+    rows = await query(
+      `SELECT movie_id, title, release_year, avg_rating, total_ratings, poster_url, language
+       FROM Movies WHERE movie_id != ?
+       ORDER BY avg_rating DESC, total_ratings DESC LIMIT ?`,
+      [movieId, limit]
+    );
+  }
+  return prepareMovies(rows);
+}
+
 async function getMoviesForMoodScoring() {
   const now = Date.now();
   if (moodMovieCache && now - moodCacheTime < 5 * 60 * 1000) return moodMovieCache;
@@ -403,13 +432,7 @@ const server = http.createServer(async (req, res) => {
     const similarMatch = pathname.match(/^\/api\/movies\/(\d+)\/similar$/);
     if (similarMatch) {
       const movieId = parseInt(similarMatch[1], 10);
-      let rows;
-      try {
-        rows = await callProc('get_because_you_watched', [movieId, 8]);
-      } catch {
-        rows = await query(SQL_SIMILAR_MOVIES, [movieId, movieId, 8]);
-      }
-      return sendJson(res, prepareMovies(rows));
+      return sendJson(res, await getSimilarMovies(movieId, 8));
     }
 
     const movieMatch = pathname.match(/^\/api\/movies\/(\d+)$/);

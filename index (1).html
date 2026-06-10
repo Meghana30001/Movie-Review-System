@@ -952,48 +952,85 @@ function parseMovieGenres(genres) {
   return (genres || '').split(',').map(g => g.trim()).filter(Boolean);
 }
 
+function escapeHtml(str) {
+  return String(str ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function renderStars(score) {
+  const n = Math.min(5, Math.max(0, Math.round(Number(score) || 0)));
+  return '★'.repeat(n) + '☆'.repeat(5 - n);
+}
+
+function renderReviews(reviews) {
+  const revEl = document.getElementById('modal-reviews');
+  const list = Array.isArray(reviews) ? reviews : [];
+  if (!list.length) {
+    revEl.innerHTML = '<div style="color:var(--text2);font-size:13px">No reviews yet. Be the first!</div>';
+    return;
+  }
+  revEl.innerHTML = list.slice(0, 5).map(r => `
+    <div class="review-card">
+      <div class="review-header">
+        <span class="review-author">${escapeHtml(r.reviewer || 'Anonymous')}</span>
+        <span class="stars">${renderStars(r.score)}</span>
+      </div>
+      <div class="review-text">${r.review_text ? escapeHtml(r.review_text) : '<i>No text review</i>'}</div>
+    </div>`).join('');
+}
+
+function renderSimilarMovies(movies) {
+  const el = document.getElementById('modal-similar');
+  const list = Array.isArray(movies) ? movies : [];
+  if (!list.length) {
+    el.innerHTML = '<div style="color:var(--text2);font-size:13px">No similar movies found.</div>';
+    return;
+  }
+  renderGrid('modal-similar', list.slice(0, 6));
+}
+
 async function openMovie(id) {
   currentMovieId = id; selectedRating = 0;
   document.querySelectorAll('.star').forEach(s => s.classList.remove('active'));
   document.getElementById('review-text').value = '';
+  document.getElementById('modal-reviews').innerHTML = '<div style="color:var(--text2);font-size:13px">Loading reviews…</div>';
+  document.getElementById('modal-similar').innerHTML = '<div style="color:var(--text2);font-size:13px">Loading similar movies…</div>';
   document.getElementById('movie-modal').classList.add('show');
 
-  const m = await fetch(`${API}/movies/${id}`, {credentials:'include'}).then(r=>r.json());
-  if (m.error) {
-    showToast(m.error || 'Could not load movie');
-    closeModalDirect();
-    return;
+  try {
+    const res = await fetch(`${API}/movies/${id}`, { credentials: 'include' });
+    const m = await res.json();
+    if (!res.ok || m.error) {
+      showToast(m.error || m.detail || 'Could not load movie');
+      closeModalDirect();
+      return;
+    }
+
+    const modalImg = document.getElementById('modal-img');
+    modalImg.src = posterUrl(m.poster_url, m.title);
+    modalImg.alt = m.title || 'Movie poster';
+    modalImg.onerror = () => { modalImg.src = posterUrl('', m.title); };
+    document.getElementById('modal-title').textContent = m.title || '';
+    document.getElementById('modal-meta').textContent = `${m.release_year || ''}  •  ${m.duration ? m.duration + 'min' : ''}  •  ${m.language || ''}  •  ★ ${Number(m.avg_rating || 0).toFixed(1)} (${m.total_ratings || 0} ratings)`;
+    document.getElementById('modal-synopsis').textContent = m.synopsis || 'No synopsis available.';
+    document.getElementById('modal-genres').innerHTML = parseMovieGenres(m.genres).map(g => `<span class="tag tag-accent">${escapeHtml(g)}</span>`).join('');
+
+    document.getElementById('modal-actions').innerHTML =
+      `<button class="btn btn-outline btn-sm" onclick="toggleWatchlist(${id})">🔖 Watchlist</button>` +
+      `<button class="btn btn-outline btn-sm" onclick="markWatched(${id})">✅ Mark Watched</button>`;
+
+    renderReviews(m.reviews);
+
+    const simRes = await fetch(`${API}/movies/${id}/similar`, { credentials: 'include' });
+    const sim = await simRes.json();
+    renderSimilarMovies(simRes.ok && !sim.error ? sim : []);
+  } catch {
+    document.getElementById('modal-reviews').innerHTML = '<div style="color:var(--text2);font-size:13px">Could not load reviews.</div>';
+    document.getElementById('modal-similar').innerHTML = '<div style="color:var(--text2);font-size:13px">Could not load similar movies.</div>';
   }
-
-  const modalImg = document.getElementById('modal-img');
-  modalImg.src = posterUrl(m.poster_url, m.title);
-  modalImg.alt = m.title || 'Movie poster';
-  modalImg.onerror = () => { modalImg.src = posterUrl('', m.title); };
-  document.getElementById('modal-title').textContent = m.title;
-  document.getElementById('modal-meta').textContent = `${m.release_year || ''}  •  ${m.duration ? m.duration+'min' : ''}  •  ${m.language || ''}  •  ★ ${(m.avg_rating||0).toFixed(1)} (${m.total_ratings} ratings)`;
-  document.getElementById('modal-synopsis').textContent = m.synopsis || 'No synopsis available.';
-  document.getElementById('modal-genres').innerHTML = parseMovieGenres(m.genres).map(g=>`<span class="tag tag-accent">${g}</span>`).join('');
-
-  const wlBtn = `<button class="btn btn-outline btn-sm" onclick="toggleWatchlist(${id})">🔖 Watchlist</button>`;
-  const wchBtn = `<button class="btn btn-outline btn-sm" onclick="markWatched(${id})">✅ Mark Watched</button>`;
-  document.getElementById('modal-actions').innerHTML = wlBtn + wchBtn;
-
-  // Reviews
-  const revEl = document.getElementById('modal-reviews');
-  if (m.reviews?.length) {
-    revEl.innerHTML = m.reviews.slice(0,5).map(r=>`
-      <div class="review-card">
-        <div class="review-header">
-          <span class="review-author">${r.reviewer}</span>
-          <span class="stars">${'★'.repeat(r.score)}${'☆'.repeat(5-r.score)}</span>
-        </div>
-        <div class="review-text">${r.review_text || '<i>No text review</i>'}</div>
-      </div>`).join('');
-  } else { revEl.innerHTML = '<div style="color:var(--text2);font-size:13px">No reviews yet. Be the first!</div>'; }
-
-  // Similar
-  const sim = await fetch(`${API}/movies/${id}/similar`, {credentials:'include'}).then(r=>r.json());
-  renderGrid('modal-similar', sim.slice(0,6));
 }
 
 function closeModal(e) { if (e.target.id === 'movie-modal') closeModalDirect(); }

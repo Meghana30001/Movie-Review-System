@@ -128,6 +128,18 @@ async function query(sql, params = []) {
   return rows;
 }
 
+function resolveLanguageCodes(language) {
+  if (!language) return [];
+  const lang = String(language).trim();
+  const allGroups = [...INDIAN_LANGUAGE_GROUPS, ...INTERNATIONAL_LANGUAGE_GROUPS];
+  for (const group of allGroups) {
+    if (group.browse === lang || group.codes.some((code) => code.toLowerCase() === lang.toLowerCase())) {
+      return group.codes;
+    }
+  }
+  return [lang];
+}
+
 // Direct queries on Movies table — avoids broken MySQL views on Aiven
 const SQL_TOP_RATED = `
   SELECT movie_id, title, release_year, language, avg_rating, total_ratings, poster_url
@@ -403,7 +415,11 @@ const server = http.createServer(async (req, res) => {
         params.push(...searchParams);
       } else {
         if (genre) { conditions.push('g.genre_name = ?'); params.push(genre); }
-        if (language) { conditions.push('m.language = ?'); params.push(language); }
+        if (language) {
+          const codes = resolveLanguageCodes(language);
+          conditions.push(`m.language IN (${codes.map(() => '?').join(', ')})`);
+          params.push(...codes);
+        }
         if (country === 'India') {
           conditions.push(`m.language IN (${INDIAN_LANGUAGES.map(() => '?').join(', ')})`);
           params.push(...INDIAN_LANGUAGES);

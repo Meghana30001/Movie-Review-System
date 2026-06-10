@@ -625,13 +625,31 @@ function showAuthError(msg, success = false) {
 }
 
 // ─── HOME ────────────────────────────────────────────────────
+async function fetchMovieList(url, fallbackUrl) {
+  try {
+    const res = await fetch(url, { credentials: 'include' });
+    const data = await res.json();
+    if (Array.isArray(data)) return data;
+    if (Array.isArray(data.movies)) return data.movies;
+    if (fallbackUrl) {
+      const fb = await fetch(fallbackUrl, { credentials: 'include' }).then(r => r.json());
+      return Array.isArray(fb.movies) ? fb.movies : [];
+    }
+    return [];
+  } catch {
+    if (!fallbackUrl) return [];
+    const fb = await fetch(fallbackUrl, { credentials: 'include' }).then(r => r.json());
+    return Array.isArray(fb.movies) ? fb.movies : [];
+  }
+}
+
 async function loadHome() {
   const [trending, topRated] = await Promise.all([
-    fetch(`${API}/movies/trending`, {credentials:'include'}).then(r=>r.json()),
-    fetch(`${API}/movies/top-rated`, {credentials:'include'}).then(r=>r.json())
+    fetchMovieList(`${API}/movies/trending`, `${API}/movies?sort=total_ratings&order=desc&limit=6`),
+    fetchMovieList(`${API}/movies/top-rated`, `${API}/movies?sort=avg_rating&order=desc&limit=6`)
   ]);
-  renderGrid('grid-trending', (Array.isArray(trending) ? trending : []).slice(0, 6));
-  renderGrid('grid-toprated', (Array.isArray(topRated) ? topRated : []).slice(0, 6));
+  renderGrid('grid-trending', trending.slice(0, 6));
+  renderGrid('grid-toprated', topRated.slice(0, 6));
 }
 
 // ─── BROWSE ──────────────────────────────────────────────────

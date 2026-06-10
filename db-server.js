@@ -128,28 +128,18 @@ async function query(sql, params = []) {
   return rows;
 }
 
-// Direct queries — avoids broken MySQL views on some cloud hosts (e.g. Aiven)
+// Direct queries on Movies table — avoids broken MySQL views on Aiven
 const SQL_TOP_RATED = `
-  SELECT m.movie_id, m.title, m.release_year, m.language,
-         m.avg_rating, m.total_ratings, m.poster_url,
-         (SELECT GROUP_CONCAT(DISTINCT g.genre_name ORDER BY g.genre_name SEPARATOR ', ')
-          FROM Movie_Genres mg
-          JOIN Genres g ON mg.genre_id = g.genre_id
-          WHERE mg.movie_id = m.movie_id) AS genres
-  FROM Movies m
-  ORDER BY m.avg_rating DESC, m.total_ratings DESC, m.release_year DESC
+  SELECT movie_id, title, release_year, language, avg_rating, total_ratings, poster_url
+  FROM Movies
+  ORDER BY avg_rating DESC, total_ratings DESC, release_year DESC
   LIMIT ?
 `;
 
 const SQL_TRENDING = `
-  SELECT m.movie_id, m.title, m.release_year, m.avg_rating,
-         m.total_ratings, m.poster_url,
-         COUNT(r.rating_id) AS recent_ratings
-  FROM Movies m
-  LEFT JOIN Ratings r ON m.movie_id = r.movie_id
-    AND r.created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
-  GROUP BY m.movie_id, m.title, m.release_year, m.avg_rating, m.total_ratings, m.poster_url
-  ORDER BY recent_ratings DESC, m.total_ratings DESC, m.avg_rating DESC
+  SELECT movie_id, title, release_year, language, avg_rating, total_ratings, poster_url
+  FROM Movies
+  ORDER BY total_ratings DESC, avg_rating DESC, release_year DESC
   LIMIT ?
 `;
 
@@ -267,7 +257,7 @@ const server = http.createServer(async (req, res) => {
 
   try {
     if (pathname === '/' || pathname === '/api/health') {
-      return sendJson(res, { status: 'ok', service: 'CineMatch API' });
+      return sendJson(res, { status: 'ok', service: 'CineMatch API', version: '2.1.0' });
     }
 
     if (pathname === '/api/auth/register' && req.method === 'POST') {

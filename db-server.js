@@ -128,6 +128,43 @@ async function query(sql, params = []) {
   return rows;
 }
 
+// Direct queries — avoids broken MySQL views on some cloud hosts (e.g. Aiven)
+const SQL_TOP_RATED = `
+  SELECT m.movie_id, m.title, m.release_year, m.language,
+         m.avg_rating, m.total_ratings, m.poster_url,
+         (SELECT GROUP_CONCAT(DISTINCT g.genre_name ORDER BY g.genre_name SEPARATOR ', ')
+          FROM Movie_Genres mg
+          JOIN Genres g ON mg.genre_id = g.genre_id
+          WHERE mg.movie_id = m.movie_id) AS genres
+  FROM Movies m
+  ORDER BY m.avg_rating DESC, m.total_ratings DESC, m.release_year DESC
+  LIMIT ?
+`;
+
+const SQL_TRENDING = `
+  SELECT m.movie_id, m.title, m.release_year, m.avg_rating,
+         m.total_ratings, m.poster_url,
+         COUNT(r.rating_id) AS recent_ratings
+  FROM Movies m
+  LEFT JOIN Ratings r ON m.movie_id = r.movie_id
+    AND r.created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+  GROUP BY m.movie_id, m.title, m.release_year, m.avg_rating, m.total_ratings, m.poster_url
+  ORDER BY recent_ratings DESC, m.total_ratings DESC, m.avg_rating DESC
+  LIMIT ?
+`;
+
+const SQL_GENRE_POPULARITY = `
+  SELECT g.genre_name,
+         COUNT(DISTINCT mg.movie_id) AS movie_count,
+         ROUND(AVG(m.avg_rating), 2) AS avg_genre_rating,
+         SUM(m.total_ratings) AS total_votes
+  FROM Genres g
+  JOIN Movie_Genres mg ON g.genre_id = mg.genre_id
+  JOIN Movies m ON mg.movie_id = m.movie_id
+  GROUP BY g.genre_name
+  ORDER BY total_votes DESC
+`;
+
 async function callProc(name, args = []) {
   const placeholders = args.map(() => '?').join(', ');
   const [rows] = await pool.query(`CALL ${name}(${placeholders})`, args);
@@ -244,12 +281,12 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (pathname === '/api/movies/trending') {
-      const movies = prepareMovies(await query('SELECT * FROM vw_trending_movies LIMIT 10'));
+      const movies = prepareMovies(await query(SQL_TRENDING, [10]));
       return sendJson(res, movies);
     }
 
     if (pathname === '/api/movies/top-rated') {
-      const movies = prepareMovies(await query('SELECT * FROM vw_top_rated_movies LIMIT 20'));
+      const movies = prepareMovies(await query(SQL_TOP_RATED, [20]));
       return sendJson(res, movies);
     }
 
@@ -364,7 +401,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (pathname === '/api/genres/popularity') {
-      return sendJson(res, await query('SELECT * FROM vw_genre_popularity'));
+      return sendJson(res, await query(SQL_GENRE_POPULARITY));
     }
 
     if (pathname === '/api/ratings' && req.method === 'POST') {
@@ -460,10 +497,10 @@ const server = http.createServer(async (req, res) => {
         return sendJson(res, prepareMovies(await callProc('get_collaborative_recommendations', [session.user_id, 10])));
       }
       if (type === 'popular') {
-        return sendJson(res, prepareMovies(await query('SELECT * FROM vw_top_rated_movies LIMIT 10')));
+        return sendJson(res, prepareMovies(await query(SQL_TOP_RATED, [10])));
       }
       if (type === 'trending') {
-        return sendJson(res, prepareMovies(await query('SELECT * FROM vw_trending_movies LIMIT 10')));
+        return sendJson(res, prepareMovies(await query(SQL_TRENDING, [10])));
       }
     }
 

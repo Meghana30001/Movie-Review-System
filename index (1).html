@@ -630,8 +630,8 @@ async function loadHome() {
     fetch(`${API}/movies/trending`, {credentials:'include'}).then(r=>r.json()),
     fetch(`${API}/movies/top-rated`, {credentials:'include'}).then(r=>r.json())
   ]);
-  renderGrid('grid-trending', trending.slice(0,6));
-  renderGrid('grid-toprated', topRated.slice(0,6));
+  renderGrid('grid-trending', (Array.isArray(trending) ? trending : []).slice(0, 6));
+  renderGrid('grid-toprated', (Array.isArray(topRated) ? topRated : []).slice(0, 6));
 }
 
 // ─── BROWSE ──────────────────────────────────────────────────

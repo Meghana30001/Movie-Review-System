@@ -15,7 +15,9 @@ const {
   buildSearchCondition,
   rankSearchResults,
   ensurePoster,
-  buildLanguageGroups
+  buildLanguageGroups,
+  buildDedupedMoviesQuery,
+  buildDedupedCountQuery
 } = require('./movie-utils');
 
 const port = parseInt(process.env.PORT || '5000', 10);
@@ -141,19 +143,13 @@ function resolveLanguageCodes(language) {
 }
 
 // Direct queries on Movies table — avoids broken MySQL views on Aiven
-const SQL_TOP_RATED = `
-  SELECT movie_id, title, release_year, language, avg_rating, total_ratings, poster_url
-  FROM Movies
-  ORDER BY avg_rating DESC, total_ratings DESC, release_year DESC
-  LIMIT ?
-`;
+const SQL_TOP_RATED = buildDedupedMoviesQuery({
+  orderClause: 'ORDER BY m.avg_rating DESC, m.total_ratings DESC, m.release_year DESC LIMIT ?'
+});
 
-const SQL_TRENDING = `
-  SELECT movie_id, title, release_year, language, avg_rating, total_ratings, poster_url
-  FROM Movies
-  ORDER BY total_ratings DESC, avg_rating DESC, release_year DESC
-  LIMIT ?
-`;
+const SQL_TRENDING = buildDedupedMoviesQuery({
+  orderClause: 'ORDER BY m.total_ratings DESC, m.avg_rating DESC, m.release_year DESC LIMIT ?'
+});
 
 const SQL_GENRE_POPULARITY = `
   SELECT g.genre_name,
@@ -362,11 +358,22 @@ const server = http.createServer(async (req, res) => {
       );
       const result = [];
       for (const row of rows) {
-        const movies = prepareMovies(await query(
-          'SELECT movie_id, title, release_year, avg_rating, poster_url, language FROM Movies WHERE language = ? ORDER BY avg_rating DESC LIMIT 5',
+        const whereClause = 'WHERE m.language = ?';
+        const [countRow] = await query(
+          `SELECT COUNT(*) AS count FROM (
+             SELECT 1 FROM Movies m ${whereClause}
+             GROUP BY LOWER(TRIM(m.title)), IFNULL(m.release_year, 0)
+           ) deduped`,
           [row.language]
-        ));
-        result.push({ language: row.language, count: row.count, movies });
+        );
+        const movies = prepareMovies(await query(
+          buildDedupedMoviesQuery({
+            whereClause,
+            orderClause: 'ORDER BY m.avg_rating DESC, m.total_ratings DESC, m.title ASC LIMIT 5'
+          }),
+          [row.language]
+        ), { dedupe: false });
+        result.push({ language: row.language, count: countRow.count, movies });
       }
       return sendJson(res, result);
     }
@@ -402,13 +409,10 @@ const server = http.createServer(async (req, res) => {
         ? parsed.query.sort : 'avg_rating';
       const order = parsed.query.order === 'asc' ? 'ASC' : 'DESC';
 
-      let sql = 'SELECT DISTINCT m.* FROM Movies m ';
       const params = [];
       const conditions = [];
-
-      if (genre) sql += 'JOIN Movie_Genres mg ON m.movie_id = mg.movie_id JOIN Genres g ON mg.genre_id = g.genre_id ';
-
       let searchTerm = '';
+
       if (search) {
         const { sql: searchSql, params: searchParams, term } = buildSearchCondition(search);
         searchTerm = term;
@@ -428,30 +432,34 @@ const server = http.createServer(async (req, res) => {
         if (year) { conditions.push('m.release_year = ?'); params.push(year); }
       }
 
+      const genreJoin = genre
+        ? 'JOIN Movie_Genres mg ON m.movie_id = mg.movie_id JOIN Genres g ON mg.genre_id = g.genre_id '
+        : '';
       const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')} ` : '';
       const orderClause = search
         ? 'ORDER BY m.avg_rating DESC, m.total_ratings DESC, m.title ASC'
         : `ORDER BY m.${sort} ${order}, m.total_ratings DESC, m.title ASC`;
 
-      if (conditions.length) sql += whereClause;
-      sql += `${orderClause} LIMIT ? OFFSET ?`;
-
       const fetchLimit = search ? Math.min(limit * 4, 200) : limit;
-      const queryParams = [...params, fetchLimit, search ? 0 : offset];
+      let movies;
 
-      let movies = await query(sql, queryParams);
+      if (search) {
+        let sql = `SELECT DISTINCT m.* FROM Movies m ${genreJoin}${whereClause}${orderClause} LIMIT ? OFFSET ?`;
+        movies = await query(sql, [...params, fetchLimit, 0]);
+      } else {
+        const sql = `${buildDedupedMoviesQuery({ genreJoin, whereClause, orderClause })} LIMIT ? OFFSET ?`;
+        movies = await query(sql, [...params, fetchLimit, offset]);
+      }
+
       await attachGenres(movies);
-      movies = prepareMovies(movies, { dedupe: !language });
+      movies = prepareMovies(movies);
       if (search) {
         movies = rankSearchResults(movies, searchTerm).slice(0, limit);
       }
 
       let total = movies.length;
       if (!search) {
-        let countSql = 'SELECT COUNT(DISTINCT m.movie_id) AS total FROM Movies m ';
-        if (genre) countSql += 'JOIN Movie_Genres mg ON m.movie_id = mg.movie_id JOIN Genres g ON mg.genre_id = g.genre_id ';
-        countSql += whereClause;
-        const [countRow] = await query(countSql, params);
+        const [countRow] = await query(buildDedupedCountQuery({ genreJoin, whereClause }), params);
         total = countRow.total;
       }
 

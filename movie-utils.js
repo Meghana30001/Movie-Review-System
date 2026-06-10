@@ -19,14 +19,58 @@ function movieQualityScore(movie) {
 
 function dedupeMovies(movies) {
   const seen = new Map();
+  const result = [];
   for (const movie of movies) {
     const key = `${(movie.title || '').toLowerCase().trim()}|${movie.release_year || ''}`;
     const existing = seen.get(key);
-    if (!existing || movieQualityScore(movie) > movieQualityScore(existing)) {
+    if (!existing) {
+      seen.set(key, movie);
+      result.push(movie);
+    } else if (movieQualityScore(movie) > movieQualityScore(existing)) {
+      const idx = result.indexOf(existing);
+      if (idx !== -1) result[idx] = movie;
       seen.set(key, movie);
     }
   }
-  return Array.from(seen.values());
+  return result;
+}
+
+const DEDUPE_RANK_SQL = `
+  ROW_NUMBER() OVER (
+    PARTITION BY LOWER(TRIM(m.title)), IFNULL(m.release_year, 0)
+    ORDER BY
+      (m.poster_url IS NOT NULL AND m.poster_url LIKE 'http%') DESC,
+      m.total_ratings DESC,
+      m.avg_rating DESC,
+      m.movie_id ASC
+  ) AS rn
+`;
+
+function buildDedupedMoviesQuery({ genreJoin = '', whereClause = '', orderClause = '' }) {
+  return `
+    SELECT movie_id, title, release_year, duration, language, synopsis,
+           poster_url, trailer_url, avg_rating, total_ratings, is_adult, created_at
+    FROM (
+      SELECT m.*, ${DEDUPE_RANK_SQL}
+      FROM Movies m
+      ${genreJoin}
+      ${whereClause}
+    ) ranked
+    WHERE rn = 1
+    ${orderClause.replace(/\bm\./g, 'ranked.')}
+  `;
+}
+
+function buildDedupedCountQuery({ genreJoin = '', whereClause = '' }) {
+  return `
+    SELECT COUNT(*) AS total FROM (
+      SELECT 1
+      FROM Movies m
+      ${genreJoin}
+      ${whereClause}
+      GROUP BY LOWER(TRIM(m.title)), IFNULL(m.release_year, 0)
+    ) deduped
+  `;
 }
 
 function ensurePoster(movie) {
@@ -100,28 +144,33 @@ function rankSearchResults(movies, term) {
 }
 
 async function buildLanguageGroups(query, groups, prepareMoviesFn) {
-  const countRows = await query(
-    "SELECT language, COUNT(*) AS count FROM Movies WHERE language IS NOT NULL AND language != '' GROUP BY language"
-  );
-  const countMap = Object.fromEntries(countRows.map(r => [r.language, Number(r.count)]));
-
   const result = [];
   for (const group of groups) {
-    const count = group.codes.reduce((sum, code) => sum + (countMap[code] || 0), 0);
+    const placeholders = group.codes.map(() => '?').join(', ');
+    const whereClause = `WHERE m.language IN (${placeholders})`;
+
+    const [countRow] = await query(
+      `SELECT COUNT(*) AS count FROM (
+         SELECT 1 FROM Movies m ${whereClause}
+         GROUP BY LOWER(TRIM(m.title)), IFNULL(m.release_year, 0)
+       ) deduped`,
+      group.codes
+    );
+    const count = Number(countRow.count);
     if (!count) continue;
 
-    const placeholders = group.codes.map(() => '?').join(', ');
     const movies = await query(
-      `SELECT movie_id, title, release_year, avg_rating, poster_url, language
-       FROM Movies WHERE language IN (${placeholders})
-       ORDER BY avg_rating DESC LIMIT 5`,
+      buildDedupedMoviesQuery({
+        whereClause,
+        orderClause: 'ORDER BY m.avg_rating DESC, m.total_ratings DESC, m.title ASC LIMIT 5'
+      }),
       group.codes
     );
 
     result.push({
       language: group.browse,
       count,
-      movies: prepareMoviesFn(movies)
+      movies: prepareMoviesFn(movies, { dedupe: false })
     });
   }
   return result;
@@ -134,5 +183,7 @@ module.exports = {
   prepareMovies,
   buildSearchCondition,
   rankSearchResults,
-  buildLanguageGroups
+  buildLanguageGroups,
+  buildDedupedMoviesQuery,
+  buildDedupedCountQuery
 };

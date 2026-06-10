@@ -3,8 +3,7 @@
 --  Database: MySQL 8.0+
 -- ============================================================
 
-CREATE DATABASE IF NOT EXISTS movie_rec_db;
-USE movie_rec_db;
+
 
 -- ─── CORE TABLES ────────────────────────────────────────────
 

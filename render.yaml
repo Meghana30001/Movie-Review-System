@@ -1,10 +1,11 @@
 services:
   - type: web
     name: cinematch-api
-    runtime: node
+    runtime: java
+    rootDir: backend
     plan: free
-    buildCommand: npm install
-    startCommand: node db-server.js
+    buildCommand: mvn -DskipTests package
+    startCommand: java -jar target/cinematch-api-0.0.1-SNAPSHOT.jar
     healthCheckPath: /api/health
     envVars:
       - key: NODE_ENV
@@ -18,7 +19,7 @@ services:
       - key: MYSQL_PASSWORD
         sync: false
       - key: MYSQL_DATABASE
-        value: movie_rec_db
+        value: defaultdb
       - key: MYSQL_SSL
         value: "true"
       - key: FRONTEND_URL

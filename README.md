@@ -11,7 +11,7 @@ A full-stack movie discovery and recommendation platform with user authenticatio
 | Layer | Technology |
 |-------|------------|
 | **Frontend** | HTML5, CSS3, Vanilla JavaScript |
-| **Backend API** | Node.js (`db-server.js`) |
+| **Backend API** | Java 17 + Spring Boot (`backend/`) — Node.js (`db-server.js`) kept for reference |
 | **Database** | MySQL 8.0+ |
 | **DB Driver** | `mysql2` |
 | **Auth** | Session cookies + PBKDF2 password hashing |
@@ -63,7 +63,7 @@ flowchart LR
 
   subgraph local [Local Dev]
   FE[server.js :3000]
-  API[db-server.js :5000]
+  API[Spring Boot API :5000]
   end
 
   subgraph cloud [Production]
@@ -93,7 +93,8 @@ flowchart LR
 Movie-Review-System/
 ├── index (1).html        # Frontend SPA (CineMatch UI)
 ├── server.js             # Local static server + API proxy
-├── db-server.js          # Production/local MySQL API server
+├── backend/              # Java Spring Boot API (production on Render)
+├── db-server.js          # Legacy Node.js API server
 ├── db-config.js          # Database & language group config
 ├── db-auth.js            # Password hashing utilities
 ├── movie-utils.js        # Search, dedup, poster helpers
@@ -113,12 +114,13 @@ Movie-Review-System/
 
 ## Prerequisites
 
-- **Node.js** 18+ and npm
+- **Java** 17+ and **Maven** 3.9+ (production API)
 - **MySQL** 8.0+ (XAMPP locally, or a cloud provider for production)
 - **Git**
 
 Optional:
-- Python 3 + Flask (if using `app.py` instead of `db-server.js`)
+- **Node.js** 18+ (local dev proxy via `server.js`, or legacy `db-server.js`)
+- Python 3 + Flask (if using `app.py`)
 
 ---
 
@@ -163,7 +165,10 @@ MYSQL_DATABASE=movie_rec_db
 # Full app — frontend :3000 + API :5000
 npm run dev
 
-# API only
+# API only (Java — requires JDK 17 + Maven)
+npm run backend:java
+
+# Legacy Node API
 npm run backend
 
 # Frontend only (requires API running separately)
@@ -190,8 +195,9 @@ Run `npm run setup-db` to reset these passwords if login fails.
 | Command | Description |
 |---------|-------------|
 | `npm run dev` | Start frontend + backend locally |
-| `npm start` | Start API only (used by Render) |
-| `npm run backend` | Start MySQL API server |
+| `npm start` | Start legacy Node API |
+| `npm run backend:java` | Start Java Spring Boot API (port 5000) |
+| `npm run backend` | Start legacy Node.js API server |
 | `npm run frontend` | Start static server with API proxy |
 | `npm run setup-db` | Initialize DB schema, import data, set passwords |
 | `npm run fix-posters` | Fix broken movie poster URLs via TMDB |
